@@ -21,3 +21,6 @@ class AgentState(TypedDict, total=False):
 
     # 已经走了多少轮（防止死循环，上限一般设 10）
     iteration_count: int
+
+    # 工具调用轨迹：每次调了什么工具、耗时、是否成功（供评测框架统计指标）
+    tool_trace: list[dict]

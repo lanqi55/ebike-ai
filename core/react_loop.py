@@ -5,6 +5,7 @@ from core.state import AgentState
 from config import config
 from utils.logger import get_logger
 from tenacity import retry, stop_after_attempt, wait_fixed
+import json
 import time
 
 logger = get_logger(__name__)
@@ -28,6 +29,7 @@ class AgentLoop:
             "retrieved_docs": "",
             "final_answer": "",
             "iteration_count": 0,
+            "tool_trace": [],
         }
 
         system_prompt = (
@@ -88,6 +90,21 @@ class AgentLoop:
                 if elapsed > 5:
                     logger.warning(f"工具 {tool_name} 执行耗时 {elapsed:.1f}s，超过 5s 阈值")
                 logger.info(f"📋 工具返回: {result[:100]}...")
+
+                # 判断工具是否成功：返回 JSON 里带 "error" 字段就算失败
+                try:
+                    success = "error" not in json.loads(result)
+                except Exception:
+                    success = True  # 非 JSON 字符串，视为工具正常返回
+
+                # 记录工具调用轨迹，供评测框架统计（成功率、延迟等指标）
+                state["tool_trace"].append({
+                    "iteration": i + 1,
+                    "name": tool_name,
+                    "args": tool_args,
+                    "elapsed": round(elapsed, 3),
+                    "success": success,
+                })
 
                 # 根据工具名，把结果写进 state 对应字段
                 if tool_name == "get_battery_data":

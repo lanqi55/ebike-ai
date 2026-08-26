@@ -104,3 +104,52 @@ def test_agent_long_input_no_crash():
     assert isinstance(answer, str)
     assert answer == "诊断完成"
     assert state["iteration_count"] == 1
+
+
+def test_agent_records_tool_trace():
+    """测试：Agent 调工具时，把调用轨迹（工具名、耗时、是否成功）记进 state"""
+    class FakeLLM:
+        def __init__(self):
+            self.calls = 0
+
+        def bind_tools(self, schemas):
+            return self
+
+        def invoke(self, messages):
+            self.calls += 1
+
+            class FakeResponse:
+                def model_dump(self):
+                    return {"role": "assistant", "content": self.content}
+
+            r = FakeResponse()
+            if self.calls == 1:
+                # 第一次：要求调工具
+                r.content = "要调工具"
+                r.tool_calls = [{"name": "hello", "args": {}, "id": "1"}]
+            else:
+                # 第二次：给出最终答案
+                r.content = "诊断完成"
+                r.tool_calls = None
+            return r
+
+    def hello():
+        return {"msg": "ok"}
+
+    registry = ToolRegistry()
+    registry.register(Tool(
+        name="hello",
+        description="测试工具",
+        func=hello,
+        parameters={"type": "object", "properties": {}}
+    ))
+
+    agent = AgentLoop(llm=FakeLLM(), registry=registry, max_iter=5)
+    answer, state = agent.run("测试")
+
+    # 轨迹里正好有一条记录，且工具名正确、成功标记为 True、有耗时字段
+    assert len(state["tool_trace"]) == 1
+    trace = state["tool_trace"][0]
+    assert trace["name"] == "hello"
+    assert trace["success"] is True
+    assert "elapsed" in trace
