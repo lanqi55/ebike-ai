@@ -32,3 +32,10 @@ def test_hallucination_rate_half():
     ground_truth = {"cell1": 3.2, "cell2": 3.2, "cell3": 2.1}
     # 提到 2 个电芯（cell2、cell4），其中 1 个是幻觉 → 0.5
     assert hallucination_rate(answer, str(ground_truth)) == 0.5
+
+
+def test_detect_hallucination_is_case_insensitive():
+    # 回答里写 "Cell3"（大写），真实数据里是 "cell3"，不应误判为幻觉
+    answer = "Cell3 电压偏低"
+    ground_truth = {"cell1": 3.2, "cell2": 3.2, "cell3": 2.1}
+    assert detect_hallucination(answer, str(ground_truth)) == []

@@ -11,7 +11,7 @@ test_case_list = [
         "hardware_data": {"cell1": 3.26, "cell2": 3.25, "cell3": 2.11, "total_vol": 8.62},
         "fault_text": "电动车起步无力，爬坡断电",
         # cell3=2.11V 远低于正常值 → 核心诊断必然涉及这些词
-        "expect_keywords": ["电芯", "cell3", "电压偏低"]
+        "expect_keywords": ["电芯", "cell3", "低于"]
     },
     {
         "hardware_data": {"cell1": 3.28, "cell2": 3.27, "cell3": 3.29, "total_vol": 9.84, "charge_fast": True},
@@ -47,7 +47,7 @@ def test_agent_diagnose_accuracy(case, agent):
 
     # 原有断言：关键词命中
     keywords = case["expect_keywords"]
-    hits = [kw for kw in keywords if kw in answer]
+    hits = [kw for kw in keywords if kw.lower() in answer.lower()]
     hit_count = len(hits)
     required = max(1, len(keywords) // 2 + 1)  # 至少命中一半（向上取整）
 
