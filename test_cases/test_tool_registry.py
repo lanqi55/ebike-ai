@@ -77,3 +77,30 @@ def test_execute_tool_exception():
 
     # 断言：异常被捕获，返回 error 字符串，而不是让测试崩溃
     assert "error" in result
+
+
+def test_agent_long_input_no_crash():
+    """测试：超长输入时，Agent 正常返回，不崩溃、不死循环"""
+    class FakeLLM:
+        def bind_tools(self, schemas):
+            return self
+
+        def invoke(self, messages):
+            class FakeResponse:
+                content = "诊断完成"
+                tool_calls = None
+
+            return FakeResponse()
+
+    registry = ToolRegistry()
+    agent = AgentLoop(llm=FakeLLM(), registry=registry, max_iter=10)
+
+    # 构造一个约 4500 字的超长故障描述（真实用户可能粘贴一大段）
+    long_input = "电动车电池故障，续航大幅变短，" * 300
+
+    answer, state = agent.run(long_input)
+
+    # 不崩溃、正常返回字符串、且只跑了一轮（没有多余循环）
+    assert isinstance(answer, str)
+    assert answer == "诊断完成"
+    assert state["iteration_count"] == 1
