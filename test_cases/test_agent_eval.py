@@ -1,4 +1,7 @@
 import pytest
+import allure
+
+from evaluation.metrics import detect_hallucination, tool_success_rate
 
 # 构造批量测试用例
 # 每个用例包含: 硬件电压数据、故障描述、预期关键词列表
@@ -22,13 +25,27 @@ test_case_list = [
 # 参数化批量执行: pytest 会为 test_case_list 中每个 dict 生成一条独立测试
 @pytest.mark.parametrize("case", test_case_list)
 def test_agent_diagnose_accuracy(case, agent):
-    """验证 Agent 模式诊断输出是否包含核心关键词（半数命中即通过）"""
-    # agent 由 conftest.py 的 fixture 提供，测试里不再手写 LLM/工具初始化
-    answer, state = agent.run(
-        f"【当前电池电压】{case['hardware_data']}\n【用户问题】{case['fault_text']}"
-    )
+    """验证 Agent 诊断准确性：关键词命中 + 幻觉检测 + 工具调用成功率"""
+    with allure.step("运行 Agent 诊断"):
+        answer, state = agent.run(
+            f"【当前电池电压】{case['hardware_data']}\n【用户问题】{case['fault_text']}"
+        )
 
-    # 统计命中了几个关键词
+    # 指标1：幻觉检测（回答里有没有编造不存在的电芯）
+    hallucinated = detect_hallucination(answer, str(case["hardware_data"]))
+    with allure.step("幻觉检测"):
+        allure.attach(
+            "无幻觉" if not hallucinated else f"幻觉电芯: {hallucinated}",
+            name="幻觉检测结果",
+            attachment_type=allure.attachment_type.TEXT,
+        )
+
+    # 指标2：工具调用成功率
+    rate = tool_success_rate(state["tool_trace"])
+    with allure.step("工具调用成功率"):
+        allure.attach(f"{rate:.2%}", name="工具调用成功率", attachment_type=allure.attachment_type.TEXT)
+
+    # 原有断言：关键词命中
     keywords = case["expect_keywords"]
     hits = [kw for kw in keywords if kw in answer]
     hit_count = len(hits)
@@ -36,6 +53,8 @@ def test_agent_diagnose_accuracy(case, agent):
 
     print(f"\n📝 Agent 输出:\n{answer}")
     print(f"🔍 关键词命中: {hits} ({hit_count}/{len(keywords)}，需要≥{required})")
+    print(f"🚨 幻觉检测: {hallucinated if hallucinated else '无'}")
+    print(f"⚙️ 工具调用成功率: {rate:.2%}")
 
     assert hit_count >= required, (
         f"用例判定失败！\n"
