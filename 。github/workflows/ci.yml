@@ -1,0 +1,18 @@
+name: CI                          # 工作流名字
+
+on:                               # 什么时候触发
+  push:                           #   push 代码时
+    branches: [ main ]            #   推的是 main 分支
+
+jobs:                             # 要干哪些"活"
+  test:                           #   第一个活：跑测试
+    runs-on: ubuntu-latest        #   在干净的 Linux 机器上跑
+    steps:                        #   依次执行的步骤
+      - uses: actions/checkout@v4          # ① 把代码 clone 下来
+      - uses: actions/setup-python@v5      # ② 装 Python
+        with:
+          python-version: "3.10"
+      - name: 安装依赖
+        run: pip install -e .              # ③ 从 pyproject.toml 装依赖
+      - name: 跑测试
+        run: pytest -v                     # ④ 跑全部测试
