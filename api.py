@@ -59,6 +59,8 @@ def diagnose(req: DiagnoseRequest):
     global agent  # 要修改模块级 agent，必须声明 global
     """接收故障描述，返回诊断结果 + 诊断过程摘要"""
     try:
+        if agent is None:
+            agent = build_agent()  # 第一次请求才建，之后复用
         answer, state = agent.run(req.fault_text)
     except Exception as e:
         # 诊断出错 → 返回 500，而不是让接口直接崩掉
