@@ -1,5 +1,5 @@
 # FastAPI 服务化：把诊断 Agent 包装成 HTTP 接口
-# 作用：别人（前端 / 其他服务）用 HTTP 就能调用诊断能力，不用 import 你的 Python 代码
+# 作用：（前端 / 其他服务）用 HTTP 就能调用诊断能力，不用 import Python 代码
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 

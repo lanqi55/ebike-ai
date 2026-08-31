@@ -60,6 +60,6 @@ def test_agent_diagnose_accuracy(case, agent):
         f"用例判定失败！\n"
         f"关键词命中不足: {hit_count}/{len(keywords)}（需要≥{required}）\n"
         f"命中: {hits}\n"
-        f"未命中: {[kw for kw in keywords if kw not in answer]}\n"
+        f"未命中: {[kw for kw in keywords if kw.lower() not in answer.lower()]}\n"
         f"--- Agent 完整回答 ---\n{answer}"
     )
