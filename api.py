@@ -46,7 +46,8 @@ def build_agent() -> AgentLoop:
 
 
 app = FastAPI(title="电动车维修诊断 API", version="0.1.0")
-agent = build_agent()
+# agent = build_agent()
+agent = None   # 惰性初始化：import 时不建，第一次请求才建
 
 
 # ========== 3. 诊断接口 ==========
@@ -55,6 +56,7 @@ agent = build_agent()
 # FastAPI 会把 def 端点丢进线程池跑，不卡事件循环；用 async def 反而会阻塞整个服务。
 @app.post("/diagnose", response_model=DiagnoseResponse)
 def diagnose(req: DiagnoseRequest):
+    global agent  # 要修改模块级 agent，必须声明 global
     """接收故障描述，返回诊断结果 + 诊断过程摘要"""
     try:
         answer, state = agent.run(req.fault_text)
