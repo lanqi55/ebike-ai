@@ -28,3 +28,7 @@ build-backend = "setuptools.build_meta"
 [tool.pytest.ini_options]
 testpaths = ["test_cases"]
 pythonpath = ["."]
+
+[tool.setuptools.packages.find]
+include = ["core*", "tools*", "utils*", "evaluation*", "data*", "prompts*", "test_cases*"]
+
