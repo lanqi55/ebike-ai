@@ -1,4 +1,7 @@
 
+from core.tool_registry import Tool, ToolRegistry
+from core.react_loop import AgentLoop
+from tools.knowledge_tools import create_knowledge_tools
 import json
 
 # ① 读测试集
@@ -28,10 +31,25 @@ judges = [KeywordJudge(), FormatJudge(), HallucinationJudge(), ToolCallJudge()]
 
 results = []
 for case in cases[:3]:
+    # ===== 为这条用例造一个"假 get_battery_data" =====
+    registry = ToolRegistry()
+
+    def fake_get_battery_data():
+        return case["hardware_data"]  # mock：返回这条用例的数据，不读文件
+
+    registry.register(Tool(
+        name="get_battery_data",
+        description="读取电动车电池的最新电压数据，包括每串电芯和总电压",
+        func=fake_get_battery_data,
+        parameters={"type": "object", "properties": {}, "required": []},
+    ))
+    for tool in create_knowledge_tools():
+        registry.register(tool)
+
+    agent = AgentLoop(llm=llm, registry=registry, max_iter=10)
+
     # 跑 Agent（把硬件数据 + 故障描述拼成输入）
-    answer, state = agent.run(
-            f"【当前电池电压】{case['hardware_data']}\n【用户问题】{case['fault_text']}"
-        )
+    answer, state = agent.run(case['fault_text'])
 
     # 收集这一条的 4 个维度结果
     row = {"fault_text": case["fault_text"], "category": case["category"]}
