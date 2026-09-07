@@ -72,11 +72,15 @@ class ToolCallJudge:
 
         called_tools =  [t["name"] for t in state["tool_trace"]]
 
-        passed = expect_tool in called_tools
+        if expect_tool:
+            passed = expect_tool in called_tools
+            detail = f"期望调用{expect_tool}，实际调用了{called_tools}"
+
+        else:
+            passed = called_tools == []
+            detail = f"期望不调工具，实际调用 {called_tools}"
 
         score = 1.0 if passed else 0.0
-
-        detail = f"期望调用{expect_tool}，实际调用了{called_tools}"
 
         return {"name": self.name,
                 "score": score,
