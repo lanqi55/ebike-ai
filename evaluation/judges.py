@@ -27,6 +27,10 @@ class FormatJudge:
     name = "格式合规率"
 
     def judge(self, case, answer, state):
+        # 只有"正常"类才要求格式（对抗要拒绝、模糊要追问，不该评格式）
+        if case["category"] != "正常":
+            return {"name": self.name, "score": 1.0, "passed": None, "detail": "该类别不要求格式"}
+
         markers = ["🔧", "📊", "🛠️", "📦"]     # 4 个板块的标记
 
         found = [mk for mk in markers if mk in answer]
