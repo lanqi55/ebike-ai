@@ -30,7 +30,7 @@ from evaluation.judges import KeywordJudge, FormatJudge, HallucinationJudge, Too
 judges = [KeywordJudge(), FormatJudge(), HallucinationJudge(), ToolCallJudge()]
 
 results = []
-for case in cases[:3]:
+for case in cases:
     # ===== 为这条用例造一个"假 get_battery_data" =====
     registry = ToolRegistry()
 
