@@ -52,14 +52,34 @@ class FormatJudge:
 class HallucinationJudge:
     name = "幻觉检测"
 
+    def __init__(self,judge_llm):
+        self.judge_llm = judge_llm      # 评委 LLM 从外面传进来
+
     def judge(self, case, answer, state):
-        hallucinated = detect_hallucination(answer, str(case["hardware_data"]))
+        prompt = f"""你是严格的评测员。判断下面的电动车诊断回答有没有编造真实数据中不存在的信息（电压数值、维修步骤、配件型号）。
 
-        score =  0.0 if hallucinated else 1.0      # 有幻觉 0 分，空列表(没幻觉) 1 分
+【真实电压数据】
+{case['hardware_data']}
 
-        passed = not hallucinated    # 空列表 → not [] → True（通过）
+【知识库内容】
+{state['retrieved_docs']}
 
-        detail = f"幻觉电芯：{hallucinated}" if hallucinated else "无幻觉"
+【Agent 的回答】
+{answer}
+
+请只回复"有幻觉"或"无幻觉"，不要加任何其他文字。
+若有幻觉，格式为：有幻觉：<编造的内容>
+"""
+
+        result = self.judge_llm.invoke(prompt)
+
+        has_hallucination = "无幻觉" not in result.content
+
+        score =  0.0 if has_hallucination else 1.0      # 有幻觉 0 分，空列表(没幻觉) 1 分
+
+        passed = not has_hallucination    # 空列表 → not [] → True（通过）
+
+        detail = result.content
 
         return {"name": self.name,
                 "score": score,

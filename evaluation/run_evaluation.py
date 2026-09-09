@@ -25,9 +25,14 @@ for tool in create_hardware_tools() + create_knowledge_tools():
     registry.register(tool)
 agent = AgentLoop(llm=llm, registry=registry, max_iter=10)
 
+# 建评委 LLM（temperature=0，保证评委判断稳定）
+judge_llm = ChatTongyi(model=config.llm.model, dashscope_api_key=config.llm.api_key,
+                       temperature=0, model_kwargs={"max_tokens": 500})
+
+
 # ③ 循环跑 + 打分
 from evaluation.judges import KeywordJudge, FormatJudge, HallucinationJudge, ToolCallJudge
-judges = [KeywordJudge(), FormatJudge(), HallucinationJudge(), ToolCallJudge()]
+judges = [KeywordJudge(), FormatJudge(), HallucinationJudge(judge_llm), ToolCallJudge()]
 
 results = []
 for case in cases:
