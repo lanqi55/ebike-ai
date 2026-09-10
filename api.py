@@ -27,6 +27,18 @@ class DiagnoseResponse(BaseModel):
     tool_trace: list[dict] = Field(..., description="工具调用轨迹")
 
 
+class TestCase(BaseModel):
+    fault_text: str
+    hardware_data: dict
+    expect_keywords: list[str]
+    expect_tool: str
+    category: str
+    inject_marker: str | None = None   # 可选字段（普通用例没有）
+
+class EvaluateRequest(BaseModel):
+    cases: list[TestCase]
+
+
 # ========== 2. 构建 Agent（模块加载时建一次，之后所有请求复用） ==========
 
 def build_agent() -> AgentLoop:
@@ -73,6 +85,33 @@ def diagnose(req: DiagnoseRequest):
         retrieved_docs=state["retrieved_docs"],
         tool_trace=state["tool_trace"],
     )
+
+@app.post("/evaluate")
+def evaluate_endpoint(req: EvaluateRequest):
+    from evaluation.evaluate import evaluate
+
+    # ① Pydantic 对象 → 字典列表（evaluate 要的是字典）
+    cases = [c.model_dump() for c in req.cases]
+
+    # ② 建 LLM + 评委 LLM（跟 run_evaluation 一样）
+    llm = ChatTongyi(model=config.llm.model, dashscope_api_key=config.llm.api_key,
+                     temperature=config.llm.temperature, model_kwargs={"max_tokens": config.llm.max_tokens})
+    judge_llm = ChatTongyi(model=config.llm.model, dashscope_api_key=config.llm.api_key,
+                           temperature=0, model_kwargs={"max_tokens": 500})
+
+    # ③ 跑评测（复用函数，不用复制循环）
+    results = evaluate(cases, llm, judge_llm, runs=3)
+
+    # ④ 汇总各维度通过率
+    import pandas as pd
+    df = pd.DataFrame(results)
+    cols = ["关键词命中率", "格式合规率", "幻觉检测", "工具调用正确率", "输入鲁棒性"]
+    summary = {}
+    for c in cols:
+        v = df[c].mean()
+        summary[c] = None if pd.isna(v) else float(v)
+
+    return {"total_cases": len(results), "summary": summary, "results": results}
 
 
 @app.get("/health")
