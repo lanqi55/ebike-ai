@@ -31,11 +31,12 @@ judge_llm = ChatTongyi(model=config.llm.model, dashscope_api_key=config.llm.api_
 
 
 # ③ 循环跑 + 打分
-from evaluation.judges import KeywordJudge, FormatJudge, HallucinationJudge, ToolCallJudge
-judges = [KeywordJudge(), FormatJudge(), HallucinationJudge(judge_llm), ToolCallJudge()]
+from evaluation.judges import KeywordJudge, FormatJudge, HallucinationJudge, ToolCallJudge, RobustnessJudge
+judges = [KeywordJudge(), FormatJudge(), HallucinationJudge(judge_llm), ToolCallJudge(), RobustnessJudge()]
 
 results = []
-for case in cases:
+RUNS = 3
+for case in cases[-2:]:
     # ===== 为这条用例造一个"假 get_battery_data" =====
     registry = ToolRegistry()
 
@@ -51,17 +52,35 @@ for case in cases:
     for tool in create_knowledge_tools():
         registry.register(tool)
 
+    # ① 新增：每个维度一个空列表，准备装 N 次的结果
+    passes_by_dim = {judge.name: [] for judge in judges}
+
+    # ② 新增：内层循环跑 N 次
+    for _ in range(RUNS):
+        agent = AgentLoop(llm=llm, registry=registry, max_iter=10)  # 每次 new 一个 agent
+        answer, state = agent.run(case["fault_text"])
+        for judge in judges:
+            r = judge.judge(case, answer, state)
+            passes_by_dim[judge.name].append(r["passed"])  # 记录这一维度的结果
+
+    # ③ 新增：汇总成"通过率"
+    row = {"fault_text": case["fault_text"], "category": case["category"]}
+    for name, passes in passes_by_dim.items():
+        valid = [p for p in passes if p is not None]  # 排除"不适用"(None)
+        row[name] = sum(valid) / len(valid) if valid else None  # 通过率
+    results.append(row)
+
     agent = AgentLoop(llm=llm, registry=registry, max_iter=10)
 
-    # 跑 Agent（把硬件数据 + 故障描述拼成输入）
-    answer, state = agent.run(case['fault_text'])
-
-    # 收集这一条的 4 个维度结果
-    row = {"fault_text": case["fault_text"], "category": case["category"]}
-    for judge in judges:
-        r = judge.judge(case, answer, state)
-        row[r["name"]] = r["passed"]       # 把"过没过"存进这一行
-    results.append(row)
+    # # 跑 Agent（把硬件数据 + 故障描述拼成输入）
+    # answer, state = agent.run(case['fault_text'])
+    #
+    # # 收集这一条的 4 个维度结果
+    # row = {"fault_text": case["fault_text"], "category": case["category"]}
+    # for judge in judges:
+    #     r = judge.judge(case, answer, state)
+    #     row[r["name"]] = r["passed"]       # 把"过没过"存进这一行
+    # results.append(row)
 
 # ④ Pandas 汇总 + 导出
 import pandas as pd
