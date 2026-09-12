@@ -14,6 +14,21 @@ def tool_success_rate(trace: list[dict]) -> float:
     return success_count / len(trace)
 
 
+def tool_latency(state):
+    """工具调用平均延迟（秒），只统计成功的调用"""
+    elapsed_list = [t["elapsed"] for t in state["tool_trace"] if t.get("success")]
+
+    if not elapsed_list:
+        return None         # 没有成功调用时返回啥
+
+    return sum(elapsed_list)  / len(elapsed_list)          # 平均延迟
+
+
+def max_iter_reached(state, max_iter=10):
+    """是否走到最大迭代次数（可能死循环/超时）"""
+    return state.get("iteration_count", 0) >= max_iter
+
+
 def detect_hallucination(answer: str, ground_truth: str) -> list[str]:
     """幻觉检测：找出回答里提到、但真实数据里不存在的电芯编号。
 
