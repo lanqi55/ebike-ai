@@ -1,10 +1,6 @@
 # Agent 可调用的历史案例检索工具
 
-import sys
-import os
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-from core.tool_registry import Tool
+from ebike_ai.core.tool_registry import Tool
 
 def create_memory_tools(memory):
     """创建并返回历史案例检索工具列表

@@ -3,7 +3,7 @@ from typing import List
 import http.client
 import json
 from langchain_core.embeddings import Embeddings
-from config import config
+from ebike_ai.config import config
 
 
 class MyDashScopeEmbedding(Embeddings):

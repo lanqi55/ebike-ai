@@ -1,4 +1,4 @@
-from evaluation.metrics import detect_hallucination
+from ebike_ai.evaluation.metrics import detect_hallucination
 
 
 class KeywordJudge:

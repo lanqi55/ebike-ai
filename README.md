@@ -18,26 +18,19 @@ Python · FastAPI · LangChain · ChromaDB · 通义千问 · Pytest · Pandas �
 
 ```
 ebike_ai/
-├── api.py                  # FastAPI 服务（/diagnose + /evaluate）
-├── main_agent.py           # Agent 模式入口（命令行）
-├── build_rag.py            # 构建 RAG 知识库
-├── config.py               # 配置集中管理
-├── core/                   # Agent 引擎
-│   ├── react_loop.py       #   ReAct 循环（while + 调工具）
-│   ├── tool_registry.py    #   工具注册中心
-│   ├── memory.py           #   短期/长期记忆
-│   └── state.py            #   状态结构
-├── tools/                  # Agent 可调用的工具
-├── utils/                  # 日志封装
-├── evaluation/             # 评测平台（项目核心）
-│   ├── judges.py           #   5 个 Judge
-│   ├── metrics.py          #   性能指标（纯函数）
-│   ├── evaluate.py         #   批量评测逻辑
-│   ├── agent_tester.py     #   通用 AgentTester（可测任意 Agent）
-│   ├── run_evaluation.py   #   评测命令行入口
-│   ├── test_cases.json     #   32 条评测数据集
-│   └── visualize.py        #   通过率柱状图
-└── test_cases/             # pytest 测试
+├── src/
+│   └── ebike_ai/           # 所有代码（src 布局）
+│       ├── api.py          #   FastAPI 服务（/diagnose + /evaluate）
+│       ├── main_agent.py   #   Agent 模式入口（命令行）
+│       ├── build_rag.py    #   构建 RAG 知识库
+│       ├── config.py       #   配置集中管理
+│       ├── core/           #   Agent 引擎（react_loop/tool_registry/memory/state）
+│       ├── tools/          #   Agent 可调用的工具
+│       ├── utils/          #   日志封装
+│       └── evaluation/     #   评测平台（judges/metrics/evaluate/agent_tester）
+├── data/                   # 知识库源文档（docx）
+├── test_cases/             # pytest 测试
+└── pyproject.toml
 ```
 
 ## 🚀 快速开始
@@ -50,10 +43,10 @@ pip install -e .
 export DASHSCOPE_API_KEY="你的通义千问 API Key"
 
 # 3. 构建 RAG 知识库
-python build_rag.py
+python -m ebike_ai.build_rag
 
 # 4. 启动服务
-uvicorn api:app --reload
+uvicorn ebike_ai.api:app --reload
 ```
 
 启动后访问 `http://127.0.0.1:8000/docs` 查看接口文档。
@@ -82,7 +75,7 @@ pytest
 
 **性能指标（3 项）**：工具调用延迟、死循环检测、工具调用成功率。
 
-批量评测：`python -m evaluation.run_evaluation`，输出 Excel 报告 + 通过率柱状图。评测结果通过 `POST /evaluate` 接口对外提供。
+批量评测：`python -m ebike_ai.evaluation.run_evaluation`，输出 Excel 报告 + 通过率柱状图。评测结果通过 `POST /evaluate` 接口对外提供。
 
 > 特点：采用**多次跑统计通过率**，解决 LLM 非确定性问题。
 

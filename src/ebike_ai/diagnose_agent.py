@@ -4,10 +4,10 @@ from langchain_chroma import Chroma
 from langchain_community.chat_models import ChatTongyi
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import PromptTemplate
-from read_hardware import get_latest_battery_data
-from embedding_utils import MyDashScopeEmbedding
-from config import config
-from utils.logger import get_logger
+from ebike_ai.read_hardware import get_latest_battery_data
+from ebike_ai.embedding_utils import MyDashScopeEmbedding
+from ebike_ai.config import config
+from ebike_ai.utils.logger import get_logger
 
 logger = get_logger(__name__)
 

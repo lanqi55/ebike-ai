@@ -1,8 +1,8 @@
 
-from core.tool_registry import Tool, ToolRegistry
-from core.react_loop import AgentLoop
-from tools.knowledge_tools import create_knowledge_tools
-from evaluation.judges import KeywordJudge, FormatJudge, HallucinationJudge, ToolCallJudge, RobustnessJudge
+from ebike_ai.core.tool_registry import Tool, ToolRegistry
+from ebike_ai.core.react_loop import AgentLoop
+from ebike_ai.tools.knowledge_tools import create_knowledge_tools
+from ebike_ai.evaluation.judges import KeywordJudge, FormatJudge, HallucinationJudge, ToolCallJudge, RobustnessJudge
 
 
 def evaluate(cases, llm, judge_llm, runs=3):

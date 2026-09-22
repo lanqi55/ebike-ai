@@ -4,11 +4,11 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 
 from langchain_community.chat_models import ChatTongyi
-from core.tool_registry import ToolRegistry
-from core.react_loop import AgentLoop
-from tools.hardware_tools import create_hardware_tools
-from tools.knowledge_tools import create_knowledge_tools
-from config import config
+from ebike_ai.core.tool_registry import ToolRegistry
+from ebike_ai.core.react_loop import AgentLoop
+from ebike_ai.tools.hardware_tools import create_hardware_tools
+from ebike_ai.tools.knowledge_tools import create_knowledge_tools
+from ebike_ai.config import config
 
 
 # ========== 1. 定义"入参 / 出参"结构（Pydantic 自动校验） ==========
@@ -88,7 +88,7 @@ def diagnose(req: DiagnoseRequest):
 
 @app.post("/evaluate")
 def evaluate_endpoint(req: EvaluateRequest):
-    from evaluation.evaluate import evaluate
+    from ebike_ai.evaluation.evaluate import evaluate
 
     # ① Pydantic 对象 → 字典列表（evaluate 要的是字典）
     cases = [c.model_dump() for c in req.cases]

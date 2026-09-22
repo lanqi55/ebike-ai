@@ -62,7 +62,7 @@ class ToolRegistry:
 
 
 if __name__ == "__main__":
-    from read_hardware import get_latest_battery_data
+    from ebike_ai.read_hardware import get_latest_battery_data
     tool2 = Tool(
         name="get_battery_data",
         description="读取电动车电池的最新电压数据，包括每串电芯和总电压",

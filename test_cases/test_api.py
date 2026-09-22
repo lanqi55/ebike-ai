@@ -1,7 +1,7 @@
 
 from fastapi.testclient import TestClient
-from api import app
-import api
+from ebike_ai.api import app
+from ebike_ai import api
 import pytest
 
 @pytest.fixture(scope="module")

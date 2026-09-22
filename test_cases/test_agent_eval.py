@@ -1,7 +1,7 @@
 import pytest
 import allure
 
-from evaluation.metrics import detect_hallucination, tool_success_rate
+from ebike_ai.evaluation.metrics import detect_hallucination, tool_success_rate
 
 # 构造批量测试用例
 # 每个用例包含: 硬件电压数据、故障描述、预期关键词列表

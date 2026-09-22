@@ -2,11 +2,11 @@
 
 from collections import deque
 from langchain_chroma import Chroma
-from embedding_utils import MyDashScopeEmbedding
-from config import config
+from ebike_ai.embedding_utils import MyDashScopeEmbedding
+from ebike_ai.config import config
 from pathlib import Path
 
-PROJECT_ROOT = Path(__file__).parent.parent  # core/ 的上一级 = 项目根目录
+PROJECT_ROOT = Path(__file__).parent.parent.parent.parent  # src/ebike_ai/core/ 往上 4 层 = 项目根目录
 
 
 class ShortTermMemory:

@@ -1,5 +1,5 @@
 import json
-from config import config
+from ebike_ai.config import config
 
 def get_latest_battery_data():
     try:

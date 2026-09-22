@@ -3,7 +3,7 @@
 import serial
 import json
 import time
-from config import config
+from ebike_ai.config import config
 
 
 # 回家后仅修改这两个参数即可

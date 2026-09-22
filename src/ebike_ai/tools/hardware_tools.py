@@ -1,13 +1,8 @@
 # Agent 可调用的硬件工具
 # 基于 read_hardware.py 封装为 Tool 对象
 
-import sys
-import os
-# 确保能 import 项目根目录的模块
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-from read_hardware import get_latest_battery_data
-from core.tool_registry import Tool
+from ebike_ai.read_hardware import get_latest_battery_data
+from ebike_ai.core.tool_registry import Tool
 
 
 def create_hardware_tools():

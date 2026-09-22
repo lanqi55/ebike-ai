@@ -3,9 +3,9 @@ from langchain_community.document_loaders import DirectoryLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.document_loaders import Docx2txtLoader, PyPDFLoader
 from langchain_community.vectorstores import Chroma
-from embedding_utils import MyDashScopeEmbedding
-from config import config
-from utils.logger import get_logger
+from ebike_ai.embedding_utils import MyDashScopeEmbedding
+from ebike_ai.config import config
+from ebike_ai.utils.logger import get_logger
 
 logger = get_logger(__name__)
 

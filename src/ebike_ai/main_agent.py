@@ -2,15 +2,15 @@
 
 from langchain_community.chat_models import ChatTongyi
 
-from core.memory import LongTermMemory
-from read_hardware import get_latest_battery_data
-from core.tool_registry import ToolRegistry
-from core.react_loop import AgentLoop
-from tools.hardware_tools import create_hardware_tools
-from tools.knowledge_tools import create_knowledge_tools
-from config import config
-from utils.logger import get_logger
-from tools.memory_tools import create_memory_tools
+from ebike_ai.core.memory import LongTermMemory
+from ebike_ai.read_hardware import get_latest_battery_data
+from ebike_ai.core.tool_registry import ToolRegistry
+from ebike_ai.core.react_loop import AgentLoop
+from ebike_ai.tools.hardware_tools import create_hardware_tools
+from ebike_ai.tools.knowledge_tools import create_knowledge_tools
+from ebike_ai.config import config
+from ebike_ai.utils.logger import get_logger
+from ebike_ai.tools.memory_tools import create_memory_tools
 
 logger = get_logger(__name__)
 

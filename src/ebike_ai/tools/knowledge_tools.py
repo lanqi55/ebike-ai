@@ -1,13 +1,9 @@
 # Agent 可调用的知识库检索工具
 
-import sys
-import os
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-from embedding_utils import MyDashScopeEmbedding
+from ebike_ai.embedding_utils import MyDashScopeEmbedding
 from langchain_chroma import Chroma
-from core.tool_registry import Tool
-from config import config
+from ebike_ai.core.tool_registry import Tool
+from ebike_ai.config import config
 
 # 向量库路径
 DB_PATH = config.path.chroma_db

@@ -1,9 +1,9 @@
 # Agent 的"心脏"（while 循环 + 调工具逻辑）
 
-from core.memory import ShortTermMemory
-from core.state import AgentState
-from config import config
-from utils.logger import get_logger
+from ebike_ai.core.memory import ShortTermMemory
+from ebike_ai.core.state import AgentState
+from ebike_ai.config import config
+from ebike_ai.utils.logger import get_logger
 from tenacity import retry, stop_after_attempt, wait_fixed
 import json
 import time

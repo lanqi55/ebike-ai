@@ -8,16 +8,17 @@ import pytest
 
 # 1. 先把项目根目录加进 Python 搜索路径（必须在 import 项目模块之前）
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-if PROJECT_ROOT not in sys.path:
-    sys.path.insert(0, PROJECT_ROOT)
+SRC_DIR = os.path.join(PROJECT_ROOT, "src")
+if SRC_DIR not in sys.path:
+    sys.path.insert(0, SRC_DIR)
 
 # 2. 再 import 项目模块
 from langchain_community.chat_models import ChatTongyi
-from config import config
-from core.tool_registry import ToolRegistry
-from core.react_loop import AgentLoop
-from tools.hardware_tools import create_hardware_tools
-from tools.knowledge_tools import create_knowledge_tools
+from ebike_ai.config import config
+from ebike_ai.core.tool_registry import ToolRegistry
+from ebike_ai.core.react_loop import AgentLoop
+from ebike_ai.tools.hardware_tools import create_hardware_tools
+from ebike_ai.tools.knowledge_tools import create_knowledge_tools
 
 
 @pytest.fixture(scope="module")

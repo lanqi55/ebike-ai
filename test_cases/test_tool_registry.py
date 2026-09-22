@@ -1,5 +1,5 @@
-from core.tool_registry import Tool, ToolRegistry
-from core.react_loop import AgentLoop
+from ebike_ai.core.tool_registry import Tool, ToolRegistry
+from ebike_ai.core.react_loop import AgentLoop
 
 
 def test_agent_llm_empty_content():
