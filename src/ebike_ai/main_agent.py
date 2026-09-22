@@ -18,8 +18,8 @@ if __name__ == "__main__":
     long_mem = LongTermMemory()
     # 1. 读取硬件数据
     battery_info = get_latest_battery_data()
-    if not battery_info:
-        logger.error("错误：未检测到电池电压数据，请先运行 sim_hardware.py 生成模拟数据")
+    if "error" in battery_info:
+        logger.error(f"错误：{battery_info['error']}")
         exit()
 
     # 2. 初始化 LLM
