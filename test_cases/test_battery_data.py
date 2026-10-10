@@ -21,6 +21,7 @@ def valid_battery_data():
     }
 
 
+@pytest.mark.unit
 def test_valid_data_preserves_extra_fields_without_mutating_input():
     raw_data = {**valid_battery_data(), "timestamp": 123456}
 
@@ -31,17 +32,20 @@ def test_valid_data_preserves_extra_fields_without_mutating_input():
     assert result["timestamp"] == 123456
 
 
+@pytest.mark.unit
 def test_zero_is_a_valid_structural_boundary():
     data = {field: 0 for field in VOLTAGE_FIELDS}
 
     assert validate_battery_data(data) == data
 
 
+@pytest.mark.unit
 def test_top_level_non_object_is_rejected():
     with pytest.raises(BatteryDataValidationError, match="必须是 JSON 对象"):
         validate_battery_data([3.2, 3.2, 2.11, 8.51])
 
 
+@pytest.mark.unit
 @pytest.mark.parametrize("missing_field", VOLTAGE_FIELDS)
 def test_missing_required_field_is_rejected(missing_field):
     data = valid_battery_data()
@@ -51,6 +55,7 @@ def test_missing_required_field_is_rejected(missing_field):
         validate_battery_data(data)
 
 
+@pytest.mark.unit
 @pytest.mark.parametrize("invalid_value", ["3.2", True, None, []])
 def test_non_numeric_voltage_is_rejected(invalid_value):
     data = valid_battery_data()
@@ -60,6 +65,7 @@ def test_non_numeric_voltage_is_rejected(invalid_value):
         validate_battery_data(data)
 
 
+@pytest.mark.unit
 @pytest.mark.parametrize("invalid_value", [float("nan"), float("inf"), -float("inf")])
 def test_non_finite_voltage_is_rejected(invalid_value):
     data = valid_battery_data()
@@ -69,6 +75,7 @@ def test_non_finite_voltage_is_rejected(invalid_value):
         validate_battery_data(data)
 
 
+@pytest.mark.unit
 def test_negative_voltage_is_rejected():
     data = valid_battery_data()
     data["cell2"] = -0.01
@@ -77,6 +84,7 @@ def test_negative_voltage_is_rejected():
         validate_battery_data(data)
 
 
+@pytest.mark.unit
 def test_inconsistent_total_voltage_is_rejected():
     data = valid_battery_data()
     data["total_vol"] = 9.99
@@ -85,6 +93,7 @@ def test_inconsistent_total_voltage_is_rejected():
         validate_battery_data(data)
 
 
+@pytest.mark.unit
 def test_total_voltage_uses_two_decimal_rounding():
     data = {
         "cell1": 3.333,
@@ -96,6 +105,7 @@ def test_total_voltage_uses_two_decimal_rounding():
     assert validate_battery_data(data) == data
 
 
+@pytest.mark.integration
 def test_reader_returns_validated_latest_data(tmp_path, monkeypatch):
     log_path = tmp_path / "car_data_log.txt"
     data = valid_battery_data()
@@ -105,6 +115,7 @@ def test_reader_returns_validated_latest_data(tmp_path, monkeypatch):
     assert get_latest_battery_data() == data
 
 
+@pytest.mark.integration
 def test_reader_returns_clear_error_for_invalid_data(tmp_path, monkeypatch):
     log_path = tmp_path / "car_data_log.txt"
     invalid_data = {**valid_battery_data(), "total_vol": 99}
@@ -117,6 +128,7 @@ def test_reader_returns_clear_error_for_invalid_data(tmp_path, monkeypatch):
     assert "不一致" in result["error"]
 
 
+@pytest.mark.integration
 def test_reader_returns_clear_error_when_log_is_missing(tmp_path, monkeypatch):
     missing_log = tmp_path / "missing.txt"
     monkeypatch.setattr(config.path, "car_data_log", str(missing_log))
@@ -126,6 +138,7 @@ def test_reader_returns_clear_error_when_log_is_missing(tmp_path, monkeypatch):
     assert "日志不存在" in result["error"]
 
 
+@pytest.mark.integration
 @pytest.mark.parametrize(
     ("file_content", "expected_message"),
     [("", "日志为空"), ("not-json\n", "不是有效的 JSON")],
@@ -145,6 +158,7 @@ def test_reader_returns_clear_error_for_unreadable_content(
     assert expected_message in result["error"]
 
 
+@pytest.mark.integration
 def test_invalid_serial_data_is_not_written(tmp_path):
     log_path = tmp_path / "car_data_log.txt"
     original_content = json.dumps(valid_battery_data()) + "\n"
@@ -157,6 +171,7 @@ def test_invalid_serial_data_is_not_written(tmp_path):
     assert log_path.read_text(encoding="utf-8") == original_content
 
 
+@pytest.mark.integration
 def test_valid_serial_data_is_written(tmp_path):
     log_path = tmp_path / "nested" / "car_data_log.txt"
     data = {**valid_battery_data(), "source": "esp32"}

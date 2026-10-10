@@ -38,6 +38,13 @@ build-backend = "setuptools.build_meta"
 [tool.pytest.ini_options]
 testpaths = ["test_cases"]
 pythonpath = ["src"]
+addopts = "--strict-markers"
+markers = [
+    "unit: isolated logic with fixed data or fake collaborators",
+    "integration: component interactions without real model services",
+    "evaluation: Agent diagnosis quality checks",
+    "live: real model or embedding calls; requires --run-live and DASHSCOPE_API_KEY",
+]
 
 [tool.setuptools.packages.find]
 where = ["src"]

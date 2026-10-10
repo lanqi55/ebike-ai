@@ -3,6 +3,8 @@ import allure
 
 from ebike_ai.evaluation.metrics import detect_hallucination, tool_success_rate
 
+pytestmark = [pytest.mark.evaluation, pytest.mark.live]
+
 # 构造批量测试用例
 # 每个用例包含: 硬件电压数据、故障描述、预期关键词列表
 # 策略: N 个关键词中至少命中半数才算通过（不要求逐字匹配长句）

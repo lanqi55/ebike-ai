@@ -61,11 +61,10 @@ py -3.10 -m venv .venv
 ### A2. 运行离线测试
 
 ```powershell
-# 只移除测试子进程中的 Key，不改变当前终端配置
-.\.venv\Scripts\python.exe -c "import os, subprocess, sys; env = os.environ.copy(); env.pop('DASHSCOPE_API_KEY', None); sys.exit(subprocess.call([sys.executable, '-m', 'pytest', '-q'], env=env))"
+.\.venv\Scripts\python.exe -m pytest -q -rs
 ```
 
-预期：`50 passed, 2 skipped`；两条跳过项需要真实模型。这里的“离线”指测试不调用真实模型，依赖安装仍需要联网。当前普通 `pytest` 在配置 Key 后可能调用真实模型，请先使用上面的命令，显式测试分层尚待完成。
+预期：`62 passed, 2 skipped`；两条真实模型测试因未开启 `--run-live` 而跳过，即使设置了 Key 也不会运行。这里的“离线”指测试不调用真实模型，依赖安装仍需要联网。跳过原因由 `-rs` 展示；跳过不等于通过。
 
 ### A3. 生成并读取模拟数据
 
@@ -197,18 +196,55 @@ Invoke-RestMethod -Uri "$apiUrl/health"
 
 ```powershell
 .\.venv\Scripts\python.exe -m pip check
-# 只移除测试子进程中的 Key，不改变当前终端配置；避免触发真实模型调用
-.\.venv\Scripts\python.exe -c "import os, subprocess, sys; env = os.environ.copy(); env.pop('DASHSCOPE_API_KEY', None); sys.exit(subprocess.call([sys.executable, '-m', 'pytest', '-q'], env=env))"
+.\.venv\Scripts\python.exe -m pytest -q -rs
 ```
 
-当前离线基线为 50 条通过、2 条真实模型测试跳过。普通 `python -m pytest` 在配置 Key 后仍可能调用真实模型，显式测试分层尚待完成。
+当前默认基线为 **62 条通过、2 条真实模型测试跳过**（原有 50 条离线用例 + 12 条开关回归用例）。配置 Key 只提供凭据，`--run-live` 才允许执行真实模型测试；只选 marker 或直接指定测试路径不会开启真实调用。
 [`pip check`](https://pip.pypa.io/en/stable/cli/pip_check/) 只检查已安装包所声明的依赖是否兼容，不能发现项目忘记声明的包，也不证明业务功能正确。
 
-测试覆盖：工具注册边界、接口自动化（422/200/500）、评测指标单元测试、AgentTester 通用性验证。
+### 分类与运行命令
+
+每条测试使用一个主要分类；`live` 是额外的真实服务标记，不能把“集成测试”等同于“联网测试”。
+
+| marker | 当前数量 | 验证内容 |
+|---|---:|---|
+| `unit` | 36 | 电压计算与校验、指标、工具边界、假依赖下的 Agent 控制逻辑 |
+| `integration` | 26 | API 的 422/200/500、日志读写与校验、Agent 工具调用链、pytest 开关行为 |
+| `evaluation` | 2 | Agent 诊断质量；当前两条同时标记 `live` |
+| `live` | 2（与 evaluation 重叠） | 需要真实模型或 Embedding，默认跳过 |
+
+```powershell
+# 分别运行离线单元测试和集成测试
+.\.venv\Scripts\python.exe -m pytest -m unit -q
+.\.venv\Scripts\python.exe -m pytest -m integration -q
+# 只查看评测的收集结果，不运行测试或创建模型
+.\.venv\Scripts\python.exe -m pytest --collect-only -q -m evaluation
+# 查看所有已注册 marker
+.\.venv\Scripts\python.exe -m pytest --markers
+```
+
+开启 `--strict-markers` 后，测试装饰器中的未知 marker 会导致收集报错，避免拼写错误悄悄改变分组。新增测试应选择主要分类；需要真实服务时还要标记 `live`，并把真实客户端的创建和调用放在受开关控制的 fixture／测试执行阶段，不要放在模块导入时。
+
+### 显式运行真实模型测试（可能产生费用）
+
+先按快速开始 B 准备有效 Key、联网、模型额度、硬件日志和维修知识库，再执行：
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest -m live --run-live -q -rs
+```
+
+- 只运行 `-m live`、`-m evaluation` 或直接指定真实测试路径：仍然跳过，提示需要 `--run-live`。
+- 加 `--run-live` 但缺少 Key：跳过并说明 `DASHSCOPE_API_KEY` 未设置；不创建模型。
+- 加 `--run-live` 且有 Key：允许真实调用；Key 无效、网络异常或断言失败仍会报错，不能当成通过。
+- `--run-live` 不负责筛选：单独使用它会运行全部测试。不要将其写入默认 `addopts` 或 `PYTEST_ADDOPTS`，否则会失去手动开启的意义。
+
+开关回归使用 pytest 自带的 `pytester` 在隔离子进程中加载本项目的实际配置、fixture 和两条评测用例；替换为假模型、使用假 Key 并阻断网络。它验证的是测试执行策略，不是真实模型诊断质量。本次未执行付费评测，CI 工作流调整留待后续完成。
+
+此开关只作用于 pytest；API 的 `/diagnose`、`/evaluate` 和批量评测脚本仍按各自入口运行。
 
 ### 全新环境验证记录（2026-10-10）
 
-使用独立源码副本和新建 `.venv`，Windows / Python 3.10.11；`include-system-site-packages = false`。未复制原有虚拟环境、日志或向量库。依赖安装使用本机配置的清华 PyPI 镜像，未改变项目依赖声明。
+以下是 Day 4、增加测试分层前的历史验收结果，不是当前测试数量。使用独立源码副本和新建 `.venv`，Windows / Python 3.10.11；`include-system-site-packages = false`。未复制原有虚拟环境、日志或向量库。依赖安装使用本机配置的清华 PyPI 镜像，未改变项目依赖声明。
 
 | 检查 | 实测结果 |
 |---|---|

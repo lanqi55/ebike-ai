@@ -1,5 +1,9 @@
 # 评测指标函数的单元测试（纯函数，不花钱、不联网、秒跑）
+import pytest
+
 from ebike_ai.evaluation.metrics import tool_success_rate, detect_hallucination, hallucination_rate
+
+pytestmark = pytest.mark.unit
 
 
 def test_tool_success_rate_all_success():

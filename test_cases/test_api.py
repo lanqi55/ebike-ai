@@ -4,6 +4,8 @@ from ebike_ai.api import app
 from ebike_ai import api
 import pytest
 
+pytestmark = pytest.mark.integration
+
 @pytest.fixture(scope="module")
 def client():
     return TestClient(app)

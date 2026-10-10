@@ -1,7 +1,10 @@
+import pytest
+
 from ebike_ai.core.tool_registry import Tool, ToolRegistry
 from ebike_ai.core.react_loop import AgentLoop
 
 
+@pytest.mark.unit
 def test_agent_llm_empty_content():
     """测试：LLM 返回空内容且不调工具时，Agent 不应崩溃"""
 
@@ -25,6 +28,7 @@ def test_agent_llm_empty_content():
     assert isinstance(answer, str)
 
 
+@pytest.mark.unit
 def test_agent_max_iter_protection():
     """测试：max_iter=0 时，Agent 应立即返回超时提示，而不是无限循环"""
 
@@ -50,6 +54,7 @@ def test_agent_max_iter_protection():
     assert "超时" in answer
 
 
+@pytest.mark.unit
 def test_execute_unknown_tool():
     """测试：调用不存在的工具，应该优雅返回 error，而不是抛异常"""
     registry = ToolRegistry()   # 空注册中心，没有任何工具
@@ -60,6 +65,7 @@ def test_execute_unknown_tool():
     assert "error" in result
 
 
+@pytest.mark.unit
 def test_execute_tool_exception():
     """测试：工具内部抛异常，execute 应该捕获并返回 error"""
     def broken_tool():
@@ -79,6 +85,7 @@ def test_execute_tool_exception():
     assert "error" in result
 
 
+@pytest.mark.unit
 def test_agent_long_input_no_crash():
     """测试：超长输入时，Agent 正常返回，不崩溃、不死循环"""
     class FakeLLM:
@@ -106,6 +113,7 @@ def test_agent_long_input_no_crash():
     assert state["iteration_count"] == 1
 
 
+@pytest.mark.integration
 def test_agent_records_tool_trace():
     """测试：Agent 调工具时，把调用轨迹（工具名、耗时、是否成功）记进 state"""
     class FakeLLM:

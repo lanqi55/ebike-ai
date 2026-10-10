@@ -1,5 +1,9 @@
+import pytest
+
 from ebike_ai.evaluation.agent_tester import AgentTester
 from ebike_ai.evaluation.metrics import tool_latency, max_iter_reached
+
+pytestmark = pytest.mark.unit
 
 
 # ===== 假 Agent 和假 Judge（测试用） =====
