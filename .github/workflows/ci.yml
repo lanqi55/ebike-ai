@@ -1,20 +1,46 @@
-name: CI                          # 工作流名字
+name: CI - Offline tests
 
-on:                               # 什么时候触发
-  push:                           #   push 代码时
-    branches: [ main ]            #   推的是 main 分支
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch: # 手动重跑同一套离线检查，不开启付费评测
 
-jobs:                             # 要干哪些"活"
-  test:                           #   第一个活：跑测试
-    runs-on: ubuntu-latest        #   在干净的 Linux 机器上跑
-    steps:                        #   依次执行的步骤
-      - uses: actions/checkout@v4          # ① 把代码 clone 下来
-      - uses: actions/setup-python@v5      # ② 装 Python
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Offline tests (Python 3.10)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      # 离线 CI 不注入模型 Secret，也不从环境继承 --run-live。
+      DASHSCOPE_API_KEY: ""
+      PYTEST_ADDOPTS: ""
+      PYTHONIOENCODING: utf-8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
         with:
           python-version: "3.10"
       - name: 安装依赖
-        run: python -m pip install -e ".[dev]"  # ③ 安装运行及测试依赖
+        run: python -m pip install -e ".[dev]"
       - name: 检查依赖兼容性
         run: python -m pip check
-      - name: 跑测试
-        run: python -m pytest -v           # ④ 跑全部测试
+      - name: 运行离线测试
+        run: >-
+          python -m pytest -m "not live" -q -rs
+          --junitxml=reports/ci/junit.xml
+          --alluredir=reports/ci/allure-results
+      - name: 保存测试报告（含失败结果）
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: offline-test-results
+          path: |
+            reports/ci/junit.xml
+            reports/ci/allure-results/
+          if-no-files-found: warn # 安装或收集失败时可能还没有报告，查看前面失败步骤
+          retention-days: 7

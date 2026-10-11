@@ -8,7 +8,7 @@
 - **RAG 知识库**：Chroma 向量检索，语义匹配维修方案
 - **LLM 评测平台**：5 维度 Judge（关键词/格式/幻觉/工具调用/鲁棒性）+ 3 项性能指标（延迟/死循环/成功率）
 - **FastAPI 服务化**：`POST /diagnose`（诊断）+ `POST /evaluate`（评测）
-- **CI**：GitHub Actions 自动跑测试
+- **CI**：GitHub Actions 自动跑离线测试，保留 JUnit / Allure 结果；真实模型评测在本地显式开启
 
 ## 🛠 技术栈
 
@@ -199,7 +199,7 @@ Invoke-RestMethod -Uri "$apiUrl/health"
 .\.venv\Scripts\python.exe -m pytest -q -rs
 ```
 
-当前默认基线为 **62 条通过、2 条真实模型测试跳过**（原有 50 条离线用例 + 12 条开关回归用例）。配置 Key 只提供凭据，`--run-live` 才允许执行真实模型测试；只选 marker 或直接指定测试路径不会开启真实调用。
+当前默认基线为 **64 条通过、2 条真实模型测试跳过**（原有 50 条离线用例 + 14 条开关与 CI 策略回归用例）。配置 Key 只提供凭据，`--run-live` 才允许执行真实模型测试；只选 marker 或直接指定测试路径不会开启真实调用。
 [`pip check`](https://pip.pypa.io/en/stable/cli/pip_check/) 只检查已安装包所声明的依赖是否兼容，不能发现项目忘记声明的包，也不证明业务功能正确。
 
 ### 分类与运行命令
@@ -209,7 +209,7 @@ Invoke-RestMethod -Uri "$apiUrl/health"
 | marker | 当前数量 | 验证内容 |
 |---|---:|---|
 | `unit` | 36 | 电压计算与校验、指标、工具边界、假依赖下的 Agent 控制逻辑 |
-| `integration` | 26 | API 的 422/200/500、日志读写与校验、Agent 工具调用链、pytest 开关行为 |
+| `integration` | 28 | API 的 422/200/500、日志读写与校验、Agent 工具调用链、pytest 开关与 CI 结果行为 |
 | `evaluation` | 2 | Agent 诊断质量；当前两条同时标记 `live` |
 | `live` | 2（与 evaluation 重叠） | 需要真实模型或 Embedding，默认跳过 |
 
@@ -238,9 +238,40 @@ Invoke-RestMethod -Uri "$apiUrl/health"
 - 加 `--run-live` 且有 Key：允许真实调用；Key 无效、网络异常或断言失败仍会报错，不能当成通过。
 - `--run-live` 不负责筛选：单独使用它会运行全部测试。不要将其写入默认 `addopts` 或 `PYTEST_ADDOPTS`，否则会失去手动开启的意义。
 
-开关回归使用 pytest 自带的 `pytester` 在隔离子进程中加载本项目的实际配置、fixture 和两条评测用例；替换为假模型、使用假 Key 并阻断网络。它验证的是测试执行策略，不是真实模型诊断质量。本次未执行付费评测，CI 工作流调整留待后续完成。
+开关回归使用 pytest 自带的 `pytester` 在隔离子进程中加载本项目的实际配置、fixture 和两条评测用例；替换为假模型、使用假 Key 并阻断网络。它验证的是测试执行策略，不是真实模型诊断质量；其中两条回归检查 CI 的 live 排除规则、成功/失败退出码和 JUnit / Allure 结果。本次未执行付费评测。
 
 此开关只作用于 pytest；API 的 `/diagnose`、`/evaluate` 和批量评测脚本仍按各自入口运行。
+
+### CI 基线：绿灯的含义
+
+工作流定义在 [`.github/workflows/ci.yml`](.github/workflows/ci.yml)，名称为 `CI - Offline tests`，检查项为 `Offline tests (Python 3.10)`。
+
+| 触发方式 | 执行范围 |
+|---|---|
+| 推送 `main`、目标为 `main` 的 Pull Request | 自动安装 `.[dev]`、执行 `pip check` 和离线 pytest |
+| Actions → `CI - Offline tests` → `Run workflow` | 手动重跑同一套离线检查 |
+| 本地 `pytest -m live --run-live -q -rs` | 显式调用真实模型，需先完成上节准备；可能产生费用 |
+
+CI 使用 Ubuntu / Python 3.10，设置 15 分钟任务超时；不注入模型 Secret，将 `DASHSCOPE_API_KEY` 和 `PYTEST_ADDOPTS` 设为空，并使用 `-m "not live"` 排除真实服务用例。安装依赖和上传报告需要联网，“离线”指测试不依赖真实模型、Embedding、ESP32 或已有向量库，不是网络防火墙。新测试仍须正确标记 `live`，避免在导入阶段请求外部服务。
+
+本地复现 CI 的检查命令（先按 A1 安装 `.[dev]`；在新 PowerShell 终端执行）：
+
+```powershell
+Remove-Item Env:DASHSCOPE_API_KEY -ErrorAction SilentlyContinue
+Remove-Item Env:PYTEST_ADDOPTS -ErrorAction SilentlyContinue
+.\.venv\Scripts\python.exe -m pip check
+if ($LASTEXITCODE -ne 0) { throw "依赖检查失败" }
+.\.venv\Scripts\python.exe -m pytest -m "not live" -q -rs --junitxml=reports/ci/junit.xml --alluredir=reports/ci/allure-results --clean-alluredir
+if ($LASTEXITCODE -ne 0) { throw "离线测试失败，请查看 reports/ci/" }
+```
+
+当前预期为 **64 passed、2 deselected**。默认 pytest 的 `2 skipped` 表示收集后跳过；CI 的 `2 deselected` 表示被筛选排除，两者都不是模型测试通过。本地命令额外使用 `--clean-alluredir` 清理该目录的旧 Allure 结果，避免重复运行混入历史报告；CI 每次使用干净的 runner。
+
+pytest 直接把退出码交给 CI，没有 `continue-on-error` 或 `|| true`；测试失败会让检查变红。报告上传步骤使用 `always()`，在普通测试失败后仍上传 `offline-test-results`，保留 7 天，包含 JUnit XML 和 Allure 原始结果（不是 HTML 报告）。如果依赖安装失败，可能尚无报告，应查看失败步骤日志。退出码和失败处理依据 [pytest 文档](https://docs.pytest.org/en/stable/reference/exit-codes.html)与 [GitHub Actions 文档](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#jobsjob_idstepscontinue-on-error)。
+
+绿灯只证明这一提交在该 runner 上的依赖检查和所选离线测试通过，不证明真实诊断、RAG 质量、硬件接入或并发安全。若希望失败检查阻止 PR 合并，还需在仓库分支保护或规则集中将上述检查设为必需；工作流本身不改变仓库规则，也不能撤回已经推送的提交。
+
+付费评测目前保留为本地显式入口，不配置自动或远端付费工作流。异常脱敏、Key 轮换及知识库/测量准备尚需确认；缺少 Key 时真实测试会跳过，退出码为 0 也不能视为付费评测成功，必须核对实际执行与跳过数量。
 
 ### 全新环境验证记录（2026-10-10）
 

@@ -1,6 +1,8 @@
 """Exercise the real pytest configuration in isolated, network-free subprocesses."""
 
+import json
 from pathlib import Path
+import xml.etree.ElementTree as ET
 
 import pytest
 
@@ -159,3 +161,44 @@ def test_unknown_marker_is_a_collection_error(policy_project):
     result.assert_outcomes(errors=1)
     result.stdout.fnmatch_lines(["*'lvie' not found in*markers*configuration option*"])
     assert_model_not_created(policy_project)
+
+
+@pytest.mark.parametrize("failing", [False, True], ids=["success", "failure"])
+def test_ci_selection_exit_status_and_reports(policy_project, failing):
+    """CI must exclude live cases and preserve failures in its exit code/reports."""
+    if failing:
+        (policy_project.path / "test_cases" / "test_failure.py").write_text(
+            "import pytest\n@pytest.mark.unit\ndef test_failure():\n"
+            "    assert False, 'intentional CI failure probe'\n",
+            encoding="utf-8",
+        )
+
+    result = policy_project.runpytest_subprocess(
+        "-m", "not live", "-q", "-rs",
+        "--junitxml=reports/ci/junit.xml",
+        "--alluredir=reports/ci/allure-results",
+        # Even an accidentally supplied live flag must not override CI selection.
+        "--run-live",
+        timeout=60,
+    )
+
+    assert result.ret == (pytest.ExitCode.TESTS_FAILED if failing else pytest.ExitCode.OK)
+    result.assert_outcomes(passed=1, failed=int(failing), deselected=2)
+    assert_model_not_created(policy_project)
+
+    report_dir = policy_project.path / "reports" / "ci"
+    suite = ET.parse(report_dir / "junit.xml").getroot().find("testsuite")
+    assert suite is not None
+    assert int(suite.attrib["tests"]) == 1 + int(failing)
+    assert int(suite.attrib["failures"]) == int(failing)
+    assert int(suite.attrib["errors"]) == 0
+    assert int(suite.attrib["skipped"]) == 0
+
+    allure_results = [
+        json.loads(path.read_text(encoding="utf-8"))
+        for path in (report_dir / "allure-results").glob("*-result.json")
+    ]
+    assert {entry["name"]: entry["status"] for entry in allure_results} == {
+        "test_offline": "passed",
+        **({"test_failure": "failed"} if failing else {}),
+    }
