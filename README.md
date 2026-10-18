@@ -64,7 +64,7 @@ py -3.10 -m venv .venv
 .\.venv\Scripts\python.exe -m pytest -q -rs
 ```
 
-预期：`88 passed, 6 skipped`；两条真实模型测试需要 `--run-live`，四条真实 MySQL 测试需要 `--run-db`，仅配置凭据不会开启调用。这里的“离线”指测试不依赖真实模型或 MySQL，依赖安装仍需要联网。跳过原因由 `-rs` 展示；跳过不等于通过。
+预期：`115 passed, 6 skipped`；两条真实模型测试需要 `--run-live`，四条真实 MySQL 测试需要 `--run-db`，仅配置凭据不会开启调用。这里的“离线”指测试不依赖真实模型或 MySQL，依赖安装仍需要联网。跳过原因由 `-rs` 展示；跳过不等于通过。
 
 ### A3. 生成并读取模拟数据
 
@@ -200,7 +200,7 @@ Invoke-RestMethod -Uri "$apiUrl/health"
 .\.venv\Scripts\python.exe -m pytest -q -rs
 ```
 
-当前默认预期为 **88 条通过、6 条跳过**（原有 64 条离线用例 + 16 条数据库配置/Repository 单元测试 + 8 条数据库开关/清理策略回归；跳过的是 2 条真实模型和 4 条真实 MySQL 测试）。配置凭据不等于授权调用；模型和数据库分别由 `--run-live`、`--run-db` 开启，只选 marker 或直接指定测试路径不会开启真实调用。
+当前默认预期为 **115 条通过、6 条跳过**（Day 12 的 88 条离线用例 + 27 条建单 Repository/Service 单元测试；跳过的是 2 条真实模型和 4 条真实 MySQL 测试）。配置凭据不等于授权调用；模型和数据库分别由 `--run-live`、`--run-db` 开启，只选 marker 或直接指定测试路径不会开启真实调用。
 [`pip check`](https://pip.pypa.io/en/stable/cli/pip_check/) 只检查已安装包所声明的依赖是否兼容，不能发现项目忘记声明的包，也不证明业务功能正确。
 
 ### 分类与运行命令
@@ -209,7 +209,7 @@ Invoke-RestMethod -Uri "$apiUrl/health"
 
 | marker | 当前数量 | 验证内容 |
 |---|---:|---|
-| `unit` | 52 | 电压计算与校验、指标、工具边界、假依赖下的 Agent 控制逻辑、数据库配置与 Repository |
+| `unit` | 79 | 电压计算与校验、指标、工具边界、假依赖下的 Agent 控制逻辑、数据库配置、Repository 与建单 Service |
 | `integration` | 40 | API、日志、Agent 工具调用链、pytest 开关与 CI、数据库 fixture 清理；含 4 条需显式开启的真实 MySQL 用例 |
 | `evaluation` | 2 | Agent 诊断质量；当前两条同时标记 `live` |
 | `live` | 2（与 evaluation 重叠） | 需要真实模型或 Embedding，默认跳过 |
@@ -230,6 +230,8 @@ Invoke-RestMethod -Uri "$apiUrl/health"
 ### 显式运行真实 MySQL 测试
 
 数据库连接配置、原生 SQL 实现与本机密码输入步骤见 [第 12 天实验](docs/day12-python-mysql.md)。使用已有的 `ebike_ai_day11` 练习库，预检表结构后才写入；测试最终回滚，不自动建表或清库。
+
+最小建单 Service、车辆与电池归属校验、事务失败处理见 [第 13 天实验](docs/day13-work-order-service.md)。目前完成离线行为验证，尚未接入 API，未验证真实建单提交持久化或并发锁行为。
 
 ```powershell
 # 先按实验文档在同一终端设置 EBIKE_DB_*；不要把密码写进命令字面量
@@ -278,7 +280,7 @@ if ($LASTEXITCODE -ne 0) { throw "依赖检查失败" }
 if ($LASTEXITCODE -ne 0) { throw "离线测试失败，请查看 reports/ci/" }
 ```
 
-当前预期为 **88 passed、6 deselected**。默认 pytest 的 `6 skipped` 表示收集后跳过；CI 的 `6 deselected` 表示被筛选排除，两者都不证明真实模型或 MySQL 测试通过。本地命令额外使用 `--clean-alluredir` 清理该目录的旧 Allure 结果，避免重复运行混入历史报告；CI 每次使用干净的 runner。
+当前预期为 **115 passed、6 deselected**。默认 pytest 的 `6 skipped` 表示收集后跳过；CI 的 `6 deselected` 表示被筛选排除，两者都不证明真实模型或 MySQL 测试通过。本地命令额外使用 `--clean-alluredir` 清理该目录的旧 Allure 结果，避免重复运行混入历史报告；CI 每次使用干净的 runner。
 
 pytest 直接把退出码交给 CI，没有 `continue-on-error` 或 `|| true`；测试失败会让检查变红。报告上传步骤使用 `always()`，在普通测试失败后仍上传 `offline-test-results`，保留 7 天，包含 JUnit XML 和 Allure 原始结果（不是 HTML 报告）。如果依赖安装失败，可能尚无报告，应查看失败步骤日志。退出码和失败处理依据 [pytest 文档](https://docs.pytest.org/en/stable/reference/exit-codes.html)与 [GitHub Actions 文档](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#jobsjob_idstepscontinue-on-error)。
 
