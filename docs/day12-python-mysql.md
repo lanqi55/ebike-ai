@@ -97,5 +97,6 @@ try {
 - `python -m pytest test_cases/test_database.py -q`：16 passed，1 条既有弃用警告。
 - 清除当前测试进程的模型 Key 与 PYTEST_ADDOPTS 后，`python -m pytest -q -rs --junitxml=reports/day12/junit.xml`：88 passed、6 skipped、2 条既有弃用警告，106.06 秒。
 - 其中 2 条真实模型与 4 条真实数据库用例按开关跳过。数据库 fixture 成功/失败后的清理、配置拒绝、两个开关互不替代、CI 排除规则均使用离线替身验证。
-- Agent 只确认本机 3306 端口可连接，当前进程未配置 EBIKE_DB_* 凭据；尚未独立连接核对表结构或执行四条真实数据库用例。真实 SQL 验收待用户在本机运行第 4 节后反馈。
+- 用户随后在本机执行第 4 节测试并反馈终端摘要：`4 passed, 1 warning in 0.64s`。据此记录四条真实 MySQL 用例通过，覆盖表结构预检、车辆新增/查询、引号文本与 NULL、重复编号约束及回滚后新连接查询；这是用户本机执行反馈，Agent 未独立连接复跑，也未取得完整机器报告。
+- 唯一警告来自 `conftest.py` 导入 `langchain-community` 的弃用提示，不是数据库测试失败。此次结果不证明提交后持久化、并发、完整业务流程或真实模型链路；依赖迁移另立小目标。
 - 复习题和当天独立复述尚未收到回答，不标记学习验收通过。
