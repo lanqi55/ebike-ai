@@ -4,6 +4,7 @@
 
 import sys
 import os
+from contextlib import ExitStack
 import pytest
 
 # 1. 先把项目根目录加进 Python 搜索路径（必须在 import 项目模块之前）
@@ -26,6 +27,10 @@ pytest_plugins = ["pytester"]
 
 def pytest_addoption(parser):
     parser.addoption(
+        "--run-db", action="store_true", default=False,
+        help="Allow real MySQL tests in ebike_ai_day11 (requires EBIKE_DB_* configuration)",
+    )
+    parser.addoption(
         "--run-live",
         action="store_true",
         default=False,
@@ -34,12 +39,44 @@ def pytest_addoption(parser):
 
 
 def pytest_collection_modifyitems(config, items):
-    if config.getoption("--run-live"):
-        return
     skip_live = pytest.mark.skip(reason="Live tests require --run-live")
+    skip_db = pytest.mark.skip(reason="MySQL tests require --run-db")
     for item in items:
-        if item.get_closest_marker("live") is not None:
+        if not config.getoption("--run-live") and item.get_closest_marker("live") is not None:
             item.add_marker(skip_live)
+        if not config.getoption("--run-db") and item.get_closest_marker("db") is not None:
+            item.add_marker(skip_db)
+
+
+@pytest.fixture
+def db_connection_factory(request):
+    """Second gate also protects unmarked tests; every connection is rolled back."""
+    if not request.config.getoption("--run-db"):
+        pytest.skip("MySQL fixture requires --run-db")
+    from ebike_ai.database import DatabaseConfig, DatabaseConfigError, connect_database
+
+    try:
+        settings = DatabaseConfig.from_env()
+    except DatabaseConfigError as exc:
+        pytest.fail(str(exc), pytrace=False)
+    if settings.database != "ebike_ai_day11":
+        pytest.fail("Database tests only allow EBIKE_DB_NAME=ebike_ai_day11", pytrace=False)
+
+    cleanup = ExitStack()
+
+    def open_connection():
+        from ebike_ai.database import DatabaseConnectionError
+
+        try:
+            connection = connect_database(settings)
+        except DatabaseConnectionError as exc:
+            pytest.fail(str(exc), pytrace=False)
+        cleanup.callback(connection.close)
+        cleanup.callback(connection.rollback)
+        return connection
+
+    with cleanup:
+        yield open_connection
 
 
 @pytest.fixture(scope="module")

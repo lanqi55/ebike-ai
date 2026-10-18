@@ -64,7 +64,7 @@ py -3.10 -m venv .venv
 .\.venv\Scripts\python.exe -m pytest -q -rs
 ```
 
-预期：`62 passed, 2 skipped`；两条真实模型测试因未开启 `--run-live` 而跳过，即使设置了 Key 也不会运行。这里的“离线”指测试不调用真实模型，依赖安装仍需要联网。跳过原因由 `-rs` 展示；跳过不等于通过。
+预期：`88 passed, 6 skipped`；两条真实模型测试需要 `--run-live`，四条真实 MySQL 测试需要 `--run-db`，仅配置凭据不会开启调用。这里的“离线”指测试不依赖真实模型或 MySQL，依赖安装仍需要联网。跳过原因由 `-rs` 展示；跳过不等于通过。
 
 ### A3. 生成并读取模拟数据
 
@@ -176,6 +176,7 @@ Invoke-RestMethod -Uri "$apiUrl/health"
 | 运行 | `fastapi`、`pydantic`、`uvicorn`、`tenacity` | API、数据模型、服务启动和重试 |
 | 运行 | `pandas`、`matplotlib`、`openpyxl` | 评测数据整理、图表和 Excel 读写 |
 | 运行 | `pyserial` | 串口采集；代码中的导入名是 `serial` |
+| 运行 | `PyMySQL[rsa]` | 原生 SQL 数据库读写；RSA 认证附加依赖用于相关 MySQL 认证方式 |
 | 开发 / 测试（`dev`） | `pytest`、`allure-pytest`、`httpx`、`requests` | 测试执行、Allure 记录、FastAPI TestClient 和 HTTP 冒烟检查 |
 
 直接依赖是项目主动使用或运行时明确需要的包，传递依赖是这些包带来的其他包。
@@ -199,19 +200,20 @@ Invoke-RestMethod -Uri "$apiUrl/health"
 .\.venv\Scripts\python.exe -m pytest -q -rs
 ```
 
-当前默认基线为 **64 条通过、2 条真实模型测试跳过**（原有 50 条离线用例 + 14 条开关与 CI 策略回归用例）。配置 Key 只提供凭据，`--run-live` 才允许执行真实模型测试；只选 marker 或直接指定测试路径不会开启真实调用。
+当前默认预期为 **88 条通过、6 条跳过**（原有 64 条离线用例 + 16 条数据库配置/Repository 单元测试 + 8 条数据库开关/清理策略回归；跳过的是 2 条真实模型和 4 条真实 MySQL 测试）。配置凭据不等于授权调用；模型和数据库分别由 `--run-live`、`--run-db` 开启，只选 marker 或直接指定测试路径不会开启真实调用。
 [`pip check`](https://pip.pypa.io/en/stable/cli/pip_check/) 只检查已安装包所声明的依赖是否兼容，不能发现项目忘记声明的包，也不证明业务功能正确。
 
 ### 分类与运行命令
 
-每条测试使用一个主要分类；`live` 是额外的真实服务标记，不能把“集成测试”等同于“联网测试”。
+每条测试使用一个主要分类；`live`、`db` 是额外的真实服务标记，不能把“集成测试”等同于“联网测试”。
 
 | marker | 当前数量 | 验证内容 |
 |---|---:|---|
-| `unit` | 36 | 电压计算与校验、指标、工具边界、假依赖下的 Agent 控制逻辑 |
-| `integration` | 28 | API 的 422/200/500、日志读写与校验、Agent 工具调用链、pytest 开关与 CI 结果行为 |
+| `unit` | 52 | 电压计算与校验、指标、工具边界、假依赖下的 Agent 控制逻辑、数据库配置与 Repository |
+| `integration` | 40 | API、日志、Agent 工具调用链、pytest 开关与 CI、数据库 fixture 清理；含 4 条需显式开启的真实 MySQL 用例 |
 | `evaluation` | 2 | Agent 诊断质量；当前两条同时标记 `live` |
 | `live` | 2（与 evaluation 重叠） | 需要真实模型或 Embedding，默认跳过 |
+| `db` | 4（与 integration 重叠） | 真实 MySQL 的读写、唯一约束、回滚；默认跳过 |
 
 ```powershell
 # 分别运行离线单元测试和集成测试
@@ -223,7 +225,18 @@ Invoke-RestMethod -Uri "$apiUrl/health"
 .\.venv\Scripts\python.exe -m pytest --markers
 ```
 
-开启 `--strict-markers` 后，测试装饰器中的未知 marker 会导致收集报错，避免拼写错误悄悄改变分组。新增测试应选择主要分类；需要真实服务时还要标记 `live`，并把真实客户端的创建和调用放在受开关控制的 fixture／测试执行阶段，不要放在模块导入时。
+开启 `--strict-markers` 后，测试装饰器中的未知 marker 会导致收集报错，避免拼写错误悄悄改变分组。新增测试应选择主要分类；需要真实模型时还要标记 `live`，需要真实 MySQL 时标记 `db`，并把客户端创建和调用放在受对应开关控制的 fixture／测试执行阶段，不要放在模块导入时。
+
+### 显式运行真实 MySQL 测试
+
+数据库连接配置、原生 SQL 实现与本机密码输入步骤见 [第 12 天实验](docs/day12-python-mysql.md)。使用已有的 `ebike_ai_day11` 练习库，预检表结构后才写入；测试最终回滚，不自动建表或清库。
+
+```powershell
+# 先按实验文档在同一终端设置 EBIKE_DB_*；不要把密码写进命令字面量
+.\.venv\Scripts\python.exe -m pytest -m db --run-db -q -rs
+```
+
+预期 **4 passed**。显式开启后缺配置或连接失败会报错；默认跳过不能算作数据库验证成功。`--run-db` 不开启真实模型，`--run-live` 也不启用 MySQL。当前数据库模块尚未接入 API。
 
 ### 显式运行真实模型测试（可能产生费用）
 
@@ -252,7 +265,7 @@ Invoke-RestMethod -Uri "$apiUrl/health"
 | Actions → `CI - Offline tests` → `Run workflow` | 手动重跑同一套离线检查 |
 | 本地 `pytest -m live --run-live -q -rs` | 显式调用真实模型，需先完成上节准备；可能产生费用 |
 
-CI 使用 Ubuntu / Python 3.10，设置 15 分钟任务超时；不注入模型 Secret，将 `DASHSCOPE_API_KEY` 和 `PYTEST_ADDOPTS` 设为空，并使用 `-m "not live"` 排除真实服务用例。安装依赖和上传报告需要联网，“离线”指测试不依赖真实模型、Embedding、ESP32 或已有向量库，不是网络防火墙。新测试仍须正确标记 `live`，避免在导入阶段请求外部服务。
+CI 使用 Ubuntu / Python 3.10，设置 15 分钟任务超时；不注入模型或数据库凭据，将 `DASHSCOPE_API_KEY` 和 `PYTEST_ADDOPTS` 设为空，并使用 `-m "not live and not db"` 排除真实服务用例。安装依赖和上传报告需要联网，“离线”指测试不依赖真实模型、MySQL、Embedding、ESP32 或已有向量库，不是网络防火墙。新测试仍须正确标记 `live` 或 `db`，避免在导入阶段请求外部服务。
 
 本地复现 CI 的检查命令（先按 A1 安装 `.[dev]`；在新 PowerShell 终端执行）：
 
@@ -261,11 +274,11 @@ Remove-Item Env:DASHSCOPE_API_KEY -ErrorAction SilentlyContinue
 Remove-Item Env:PYTEST_ADDOPTS -ErrorAction SilentlyContinue
 .\.venv\Scripts\python.exe -m pip check
 if ($LASTEXITCODE -ne 0) { throw "依赖检查失败" }
-.\.venv\Scripts\python.exe -m pytest -m "not live" -q -rs --junitxml=reports/ci/junit.xml --alluredir=reports/ci/allure-results --clean-alluredir
+.\.venv\Scripts\python.exe -m pytest -m "not live and not db" -q -rs --junitxml=reports/ci/junit.xml --alluredir=reports/ci/allure-results --clean-alluredir
 if ($LASTEXITCODE -ne 0) { throw "离线测试失败，请查看 reports/ci/" }
 ```
 
-当前预期为 **64 passed、2 deselected**。默认 pytest 的 `2 skipped` 表示收集后跳过；CI 的 `2 deselected` 表示被筛选排除，两者都不是模型测试通过。本地命令额外使用 `--clean-alluredir` 清理该目录的旧 Allure 结果，避免重复运行混入历史报告；CI 每次使用干净的 runner。
+当前预期为 **88 passed、6 deselected**。默认 pytest 的 `6 skipped` 表示收集后跳过；CI 的 `6 deselected` 表示被筛选排除，两者都不证明真实模型或 MySQL 测试通过。本地命令额外使用 `--clean-alluredir` 清理该目录的旧 Allure 结果，避免重复运行混入历史报告；CI 每次使用干净的 runner。
 
 pytest 直接把退出码交给 CI，没有 `continue-on-error` 或 `|| true`；测试失败会让检查变红。报告上传步骤使用 `always()`，在普通测试失败后仍上传 `offline-test-results`，保留 7 天，包含 JUnit XML 和 Allure 原始结果（不是 HTML 报告）。如果依赖安装失败，可能尚无报告，应查看失败步骤日志。退出码和失败处理依据 [pytest 文档](https://docs.pytest.org/en/stable/reference/exit-codes.html)与 [GitHub Actions 文档](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#jobsjob_idstepscontinue-on-error)。
 

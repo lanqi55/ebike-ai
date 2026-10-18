@@ -1,6 +1,7 @@
 """Exercise the real pytest configuration in isolated, network-free subprocesses."""
 
 import json
+import os
 from pathlib import Path
 import xml.etree.ElementTree as ET
 
@@ -17,6 +18,9 @@ def policy_project(pytester, monkeypatch):
     # The child reads config afresh; never inherit a real credential or run flag.
     monkeypatch.setenv("DASHSCOPE_API_KEY", "policy-test-placeholder")
     monkeypatch.delenv("PYTEST_ADDOPTS", raising=False)
+    for name in list(os.environ):
+        if name.startswith("EBIKE_DB_"):
+            monkeypatch.delenv(name)
     monkeypatch.setenv("PYTHONPATH", str(PROJECT_ROOT / "src"))
     monkeypatch.setenv("PYTHONIOENCODING", "utf-8")
     pytester.makefile(
@@ -166,6 +170,11 @@ def test_unknown_marker_is_a_collection_error(policy_project):
 @pytest.mark.parametrize("failing", [False, True], ids=["success", "failure"])
 def test_ci_selection_exit_status_and_reports(policy_project, failing):
     """CI must exclude live cases and preserve failures in its exit code/reports."""
+    (policy_project.path / "test_cases" / "test_db_excluded.py").write_text(
+        "import pytest\n@pytest.mark.integration\n@pytest.mark.db\ndef test_db_excluded():\n"
+        "    pytest.fail('CI must exclude MySQL even with --run-db')\n",
+        encoding="utf-8",
+    )
     if failing:
         (policy_project.path / "test_cases" / "test_failure.py").write_text(
             "import pytest\n@pytest.mark.unit\ndef test_failure():\n"
@@ -174,16 +183,17 @@ def test_ci_selection_exit_status_and_reports(policy_project, failing):
         )
 
     result = policy_project.runpytest_subprocess(
-        "-m", "not live", "-q", "-rs",
+        "-m", "not live and not db", "-q", "-rs",
         "--junitxml=reports/ci/junit.xml",
         "--alluredir=reports/ci/allure-results",
         # Even an accidentally supplied live flag must not override CI selection.
         "--run-live",
+        "--run-db",
         timeout=60,
     )
 
     assert result.ret == (pytest.ExitCode.TESTS_FAILED if failing else pytest.ExitCode.OK)
-    result.assert_outcomes(passed=1, failed=int(failing), deselected=2)
+    result.assert_outcomes(passed=1, failed=int(failing), deselected=3)
     assert_model_not_created(policy_project)
 
     report_dir = policy_project.path / "reports" / "ci"
@@ -202,3 +212,87 @@ def test_ci_selection_exit_status_and_reports(policy_project, failing):
         "test_offline": "passed",
         **({"test_failure": "failed"} if failing else {}),
     }
+
+
+@pytest.mark.parametrize("args, marked", [
+    ((), True), (("-m", "db"), True), (("--run-live",), True), ((), False),
+])
+def test_database_requires_its_own_flag(policy_project, monkeypatch, args, marked):
+    # Credentials alone must not authorize opening a real connection.
+    monkeypatch.setenv("EBIKE_DB_USER", "fake-user")
+    monkeypatch.setenv("EBIKE_DB_PASSWORD", "fake-password")
+    monkeypatch.setenv("EBIKE_DB_NAME", "ebike_ai_day11")
+    (policy_project.path / "test_cases" / "test_db_gate.py").write_text(
+        "import pytest\n"
+        + ("@pytest.mark.db\n" if marked else "")
+        + "def test_db_gate(db_connection_factory):\n"
+        "    pytest.fail('Disabled MySQL test body must not run')\n",
+        encoding="utf-8",
+    )
+    result = policy_project.runpytest_subprocess(
+        "test_cases/test_db_gate.py", *args, "-q", "-rs", timeout=60,
+    )
+    result.assert_outcomes(skipped=1)
+    result.stdout.fnmatch_lines(["*requires --run-db*" if not marked else "*require --run-db*"])
+
+
+@pytest.mark.parametrize("database", [None, "not_the_practice_database"])
+def test_database_flag_rejects_missing_config_or_wrong_database(policy_project, monkeypatch, database):
+    if database:
+        monkeypatch.setenv("EBIKE_DB_USER", "fake-user")
+        monkeypatch.setenv("EBIKE_DB_PASSWORD", "fake-password")
+        monkeypatch.setenv("EBIKE_DB_NAME", database)
+    (policy_project.path / "test_cases" / "test_db_gate.py").write_text(
+        "import pytest\n@pytest.mark.db\ndef test_db_gate(db_connection_factory):\n"
+        "    pytest.fail('Invalid configuration must fail before test body')\n",
+        encoding="utf-8",
+    )
+    result = policy_project.runpytest_subprocess(
+        "test_cases/test_db_gate.py", "--run-db", "-q", timeout=60,
+    )
+    result.assert_outcomes(errors=1)
+    result.stdout.fnmatch_lines([
+        "*only allow EBIKE_DB_NAME=ebike_ai_day11*" if database else "*Missing database configuration*"
+    ])
+    assert "fake-password" not in result.stdout.str()
+
+
+@pytest.mark.parametrize("failing", [False, True], ids=["success", "failure"])
+def test_database_fixture_cleans_all_connections(policy_project, monkeypatch, failing):
+    monkeypatch.setenv("EBIKE_DB_USER", "fake-user")
+    monkeypatch.setenv("EBIKE_DB_PASSWORD", "fake-password")
+    monkeypatch.setenv("EBIKE_DB_NAME", "ebike_ai_day11")
+    (policy_project.path / "test_cases" / "test_db_cleanup.py").write_text(
+        '''from pathlib import Path
+import pytest
+import ebike_ai.database as database
+
+def record(event):
+    with (Path(__file__).parent.parent / "db-events.txt").open("a") as stream:
+        stream.write(event + "\\n")
+
+class FakeConnection:
+    def rollback(self):
+        record("rollback")
+    def close(self):
+        record("close")
+
+@pytest.fixture(autouse=True)
+def fake_driver(monkeypatch):
+    monkeypatch.setattr(database, "connect_database", lambda settings: FakeConnection())
+
+@pytest.mark.db
+def test_cleanup(db_connection_factory):
+    db_connection_factory()
+    db_connection_factory()
+'''
+        + ("    pytest.fail('intentional body failure')\n" if failing else ""),
+        encoding="utf-8",
+    )
+    result = policy_project.runpytest_subprocess(
+        "test_cases/test_db_cleanup.py", "--run-db", "-q", timeout=60,
+    )
+    result.assert_outcomes(passed=int(not failing), failed=int(failing))
+    assert (policy_project.path / "db-events.txt").read_text().splitlines() == [
+        "rollback", "close", "rollback", "close",
+    ]

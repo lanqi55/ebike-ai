@@ -31,7 +31,7 @@ jobs:
         run: python -m pip check
       - name: 运行离线测试
         run: >-
-          python -m pytest -m "not live" -q -rs
+          python -m pytest -m "not live and not db" -q -rs
           --junitxml=reports/ci/junit.xml
           --alluredir=reports/ci/allure-results
       - name: 保存测试报告（含失败结果）
