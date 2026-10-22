@@ -1,4 +1,4 @@
-"""Business and transaction behavior using real repositories with fake connections."""
+"""使用真实 Repository 和假连接验证业务规则与事务行为。"""
 
 import traceback
 from datetime import datetime
@@ -66,7 +66,7 @@ def test_success_checks_then_inserts_commits_and_closes_on_one_connection(batter
         "D13-test", 10, battery_id, "灯不亮", "CUSTOMER_STATEMENT",
         "客户描述", "RECEIVED", when, "固定测试",
     )
-    # Using the real repositories makes a separate connection or early commit observable.
+    # 使用真实 Repository，可发现其意外创建其他连接或提前提交的问题。
     names = [call[0] for call in connection.mock_calls]
     assert names[-2:] == ["commit", "close"]
     connection.commit.assert_called_once_with()
@@ -111,7 +111,7 @@ def test_database_failure_is_sanitized_and_cleanup_is_always_attempted(stage, cl
     expected = WorkOrderCommitUnknownError if stage == "commit" else WorkOrderPersistenceError
     with pytest.raises(expected) as caught:
         create_order(WorkOrderService(factory))
-    factory.assert_called_once_with()  # No automatic retry.
+    factory.assert_called_once_with()  # 不自动重试。
     assert type(caught.value) is expected
     assert_sanitized(caught.value)
     assert caught.value.rollback_failed is cleanup_fails

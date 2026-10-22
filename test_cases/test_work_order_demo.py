@@ -1,4 +1,4 @@
-"""The interactive demo must be opt-in and must attempt cleanup on interruption."""
+"""交互演示必须显式开启，并在中断时尝试清理数据。"""
 
 from unittest.mock import MagicMock
 

@@ -1,7 +1,7 @@
--- Day 11 learning script, MySQL 8.0.16+.
--- Read docs/day11-mysql-lab.md first. Execute one statement at a time.
--- STOP on any error. Never run this against an existing practice database.
--- DDL is not undone by ROLLBACK. No DROP, overwrite, or IF NOT EXISTS.
+-- 第 11 天学习脚本，适用于 MySQL 8.0.16 及以上版本。
+-- 先阅读 docs/day11-mysql-lab.md，再逐条执行语句。
+-- 遇到任何错误立即停止；已有练习库时不要再次执行本脚本。
+-- ROLLBACK 无法撤销 DDL；不使用 DROP、覆盖操作或 IF NOT EXISTS。
 CREATE DATABASE ebike_ai_day11
     CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_as_cs;
 
@@ -95,7 +95,7 @@ CREATE TABLE work_order (
             'REPAIRED', 'PARTIAL', 'UNRESOLVED', 'NO_FAULT_FOUND'
         )
     ),
-    -- Explicit IS NOT NULL prevents UNKNOWN from passing CHECK.
+    -- 显式使用 IS NOT NULL，防止 UNKNOWN 结果通过 CHECK 校验。
     CONSTRAINT ck_work_order_completion CHECK (
         (status = 'COMPLETED' AND completion_outcome IS NOT NULL)
         OR (status <> 'COMPLETED' AND completion_outcome IS NULL)

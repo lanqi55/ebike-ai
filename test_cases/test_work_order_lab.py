@@ -1,4 +1,4 @@
-"""Offline safety checks for committed-data test cleanup."""
+"""离线验证已提交测试数据的清理边界。"""
 
 from unittest.mock import MagicMock
 

@@ -1,4 +1,4 @@
-"""Create an order for an existing vehicle using one fresh transaction."""
+"""使用独立的新事务，为已有车辆创建工单。"""
 
 from collections.abc import Callable
 from datetime import datetime
@@ -14,7 +14,7 @@ from ebike_ai.repositories.work_order import WorkOrderRepository
 
 
 class WorkOrderError(RuntimeError):
-    """Public errors contain fixed messages, never driver messages or inputs."""
+    """对外错误使用固定提示，不包含驱动原始错误或输入内容。"""
 
     def __init__(self, message: str):
         super().__init__(message)
@@ -39,7 +39,7 @@ class WorkOrderPersistenceError(WorkOrderError):
 
 
 class DuplicateWorkOrderError(WorkOrderPersistenceError):
-    """An INSERT hit the business-number unique constraint."""
+    """插入时触发了工单业务编号的唯一约束。"""
 
 
 class WorkOrderNotFoundError(WorkOrderError):
@@ -47,11 +47,11 @@ class WorkOrderNotFoundError(WorkOrderError):
 
 
 class WorkOrderCommitUnknownError(WorkOrderPersistenceError):
-    """A failed commit response does not establish whether MySQL committed."""
+    """提交响应异常，无法据此判断 MySQL 是否已完成提交。"""
 
 
 class WorkOrderCleanupError(WorkOrderError):
-    """Commit succeeded, but closing failed; callers must not recreate the order."""
+    """提交成功但关闭连接失败；调用方不得重复创建工单。"""
 
     def __init__(self, work_order_id: int):
         super().__init__("Work order committed, but connection close failed; do not retry creation")
@@ -65,7 +65,7 @@ def _open_connection():
 
 class WorkOrderService:
     def __init__(self, connection_factory: Callable = _open_connection):
-        # Factories must return a NEW connection with autocommit=False each time.
+        # 连接工厂每次必须返回独立的新连接，并设置 autocommit=False。
         self.connection_factory = connection_factory
 
     def create_work_order(
@@ -74,7 +74,7 @@ class WorkOrderService:
         report_source_note: str | None = None, received_at: datetime | None = None,
         notes: str | None = None,
     ) -> int:
-        """Validate ownership, insert and commit; no retry on any failure."""
+        """校验归属后插入并提交；任何失败都不自动重试。"""
         try:
             connection = self.connection_factory()
         except (DatabaseConfigError, DatabaseConnectionError):
@@ -104,8 +104,8 @@ class WorkOrderService:
                     received_at=received_at, notes=notes,
                 )
             except pymysql.IntegrityError as exc:
-                # No primary key is supplied; the only other unique key in the
-                # existing schema is uq_work_order_no. Never parse/log driver text.
+                # 本次插入不指定主键；当前表中另一个唯一键只有 uq_work_order_no。
+                # 不解析或记录驱动原始错误文本。
                 if exc.args and exc.args[0] == 1062:
                     raise DuplicateWorkOrderError("Work order number already exists") from None
                 raise
@@ -122,8 +122,8 @@ class WorkOrderService:
             else:
                 error = WorkOrderPersistenceError("Work order database operation failed")
         finally:
-            # Cleanup also runs on interruption. A cleanup failure must not hide
-            # the primary failure, or prevent the other cleanup attempt.
+            # 执行中断时也要清理；清理失败不能掩盖原始错误，
+            # 也不能阻止其他清理步骤继续尝试。
             if not committed:
                 try:
                     connection.rollback()
@@ -164,7 +164,7 @@ class WorkOrderService:
         except Exception:
             error = WorkOrderPersistenceError("Could not read work order")
         finally:
-            # End the read transaction too; no connection or snapshot is reused.
+            # 查询结束后也要结束读事务；不复用连接或事务快照。
             try:
                 connection.rollback()
             except Exception:

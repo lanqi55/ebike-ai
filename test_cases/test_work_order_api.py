@@ -1,4 +1,4 @@
-"""HTTP contracts with a fake Service; no MySQL or model calls."""
+"""使用假 Service 验证 HTTP 契约，不调用 MySQL 或模型。"""
 
 from datetime import datetime
 from unittest.mock import MagicMock

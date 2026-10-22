@@ -1,4 +1,4 @@
-"""Local Swagger lab. Run from the repository with python -m scripts.work_order_demo."""
+"""本机 Swagger 实验；在仓库根目录执行 python -m scripts.work_order_demo。"""
 
 import argparse
 import json

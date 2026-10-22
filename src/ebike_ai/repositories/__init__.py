@@ -1,1 +1,1 @@
-"""Small SQL repositories; transaction ownership stays with their caller."""
+"""最小 SQL 数据访问层；事务由调用方管理。"""

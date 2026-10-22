@@ -1,4 +1,4 @@
-"""Real MySQL only: guarded practice database, read-only preflight, rollback cleanup."""
+"""真实 MySQL 测试：限制练习库、执行只读预检，并通过回滚清理。"""
 
 from uuid import uuid4
 
@@ -14,7 +14,7 @@ pytestmark = [pytest.mark.integration, pytest.mark.db]
 @pytest.fixture
 def vehicle_db(db_connection_factory):
     connection = db_connection_factory()
-    # Do not write until the real database matches the lab's essential contract.
+    # 确认真实数据库满足实验的必要约束后，才能开始写入。
     with connection.cursor() as cursor:
         cursor.execute("SELECT DATABASE() AS name, @@session.time_zone AS tz, @@session.sql_mode AS mode")
         session = cursor.fetchone()
@@ -68,7 +68,7 @@ def test_create_and_query_with_quotes_and_null(vehicle_db):
 
 
 def test_missing_id_returns_none(vehicle_db):
-    # A negative ID cannot exist in the lab's UNSIGNED primary key.
+    # 练习表的主键为 UNSIGNED，因此负数 ID 不可能存在。
     assert VehicleRepository(vehicle_db).get_by_id(-1) is None
 
 

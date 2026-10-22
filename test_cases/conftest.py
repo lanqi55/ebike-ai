@@ -27,7 +27,7 @@ pytest_plugins = ["pytester"]
 
 @pytest.fixture
 def work_order_lab(request):
-    """Explicit, committed-data tests; separate from the rollback-only Day 12 fixture."""
+    """显式开启会提交数据的测试；与第 12 天仅靠回滚清理的 fixture 分开。"""
     if not request.config.getoption("--run-db"):
         pytest.skip("Work order lab requires --run-db")
     from ebike_ai.database import DatabaseConfig, DatabaseConfigError
@@ -78,7 +78,7 @@ def pytest_collection_modifyitems(config, items):
 
 @pytest.fixture
 def db_connection_factory(request):
-    """Second gate also protects unmarked tests; every connection is rolled back."""
+    """第二道开关检查也保护未标记的测试；每个连接都执行回滚清理。"""
     if not request.config.getoption("--run-db"):
         pytest.skip("MySQL fixture requires --run-db")
     from ebike_ai.database import DatabaseConfig, DatabaseConfigError, connect_database

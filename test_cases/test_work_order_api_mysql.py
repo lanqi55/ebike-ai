@@ -1,4 +1,4 @@
-"""HTTP -> real Service -> real MySQL, with fresh-connection verification."""
+"""验证 HTTP → 真实 Service → 真实 MySQL 链路，并用新连接核对结果。"""
 
 from datetime import datetime
 
@@ -16,7 +16,7 @@ pytestmark = [pytest.mark.integration, pytest.mark.db]
 @pytest.fixture
 def real_api(work_order_lab, monkeypatch):
     lab = work_order_lab
-    # Override only connection configuration/tracking; the whole business path is real.
+    # 只替换连接配置与追踪方式；整条业务链路仍使用真实实现。
     monkeypatch.setitem(app.dependency_overrides, get_work_order_service, lambda: WorkOrderService(lab.connect))
     with TestClient(app) as client:
         yield client, lab
@@ -54,7 +54,7 @@ def test_http_create_query_and_independent_database_verification(real_api, with_
 ])
 def test_http_rejects_invalid_associations_without_persisting(real_api, scenario, status, code):
     client, lab = real_api
-    # Positive ID passes HTTP validation; first prove it is absent in this lab.
+    # 使用能通过 HTTP 校验的正整数 ID；先确认练习库中不存在该 ID。
     with lab.connection() as connection:
         with connection.cursor() as cursor:
             for table in ("vehicle", "battery"):

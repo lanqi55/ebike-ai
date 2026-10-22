@@ -1,4 +1,4 @@
-"""Real commits, independently observed; requires --run-db and the existing lab."""
+"""独立核对真实提交结果；需要 --run-db 开关和已有练习库。"""
 
 import pytest
 

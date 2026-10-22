@@ -1,4 +1,4 @@
-"""Work order HTTP boundary. Connections and transactions belong to the Service."""
+"""工单 HTTP 接口层；连接和事务由 Service 管理。"""
 
 import logging
 from datetime import datetime, timezone
@@ -39,7 +39,7 @@ class CreateWorkOrderRequest(BaseModel):
     @field_validator("reported_symptom", "report_source_note", "notes")
     @classmethod
     def fits_mysql_text(cls, value):
-        # MySQL TEXT is byte-limited; a character limit alone misses Chinese text.
+        # MySQL TEXT 按字节限制长度；只检查字符数无法正确约束中文文本。
         if value is not None and len(value.encode("utf-8")) > 65535:
             raise ValueError("Text must fit within 65535 UTF-8 bytes")
         return value
@@ -92,7 +92,7 @@ class WorkOrderDetail(BaseModel):
     @field_validator("received_at", "completed_at", "created_at", "updated_at")
     @classmethod
     def explicit_utc(cls, value):
-        # Database connections set UTC; DATETIME returned by PyMySQL is naive.
+        # 数据库连接使用 UTC；PyMySQL 返回的 DATETIME 值不携带时区。
         if value is None:
             return None
         return value.replace(tzinfo=timezone.utc) if value.tzinfo is None else value.astimezone(timezone.utc)
@@ -128,7 +128,7 @@ def http_error(error):
 
 
 def get_work_order_service() -> WorkOrderService:
-    # Stateless factory; no database connection is opened until a method is called.
+    # 工厂不保存请求状态；实际调用业务方法时才创建数据库连接。
     return WorkOrderService()
 
 

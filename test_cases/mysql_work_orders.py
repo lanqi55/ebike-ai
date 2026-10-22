@@ -1,4 +1,4 @@
-"""Opt-in committed-data lab. Never import credentials or connect at import time."""
+"""显式开启会提交数据的练习；导入模块时不读取凭据或连接数据库。"""
 
 import json
 from contextlib import contextmanager
@@ -26,7 +26,7 @@ CHECKS = {
 
 
 def preflight(connection):
-    """Read-only guard; mismatch stops the lab rather than repairing its schema."""
+    """只读预检；发现不匹配就停止实验，不自动修复表结构。"""
     with connection.cursor() as cursor:
         cursor.execute("SELECT DATABASE() AS name, @@session.time_zone AS tz, @@session.sql_mode AS mode")
         session = cursor.fetchone()
@@ -72,7 +72,7 @@ def preflight(connection):
 
 
 def verify_owned(row, expected):
-    """Refuse cleanup on an identity/content mismatch, including a known ID."""
+    """标识或内容不匹配时拒绝清理；核对范围包含已知 ID。"""
     if any(row.get(key) != value for key, value in expected.items()):
         raise AssertionError("Lab record identity/content mismatch; cleanup stopped")
 
@@ -125,7 +125,7 @@ class WorkOrderLab:
                         key = TABLE_KEYS[table]
                         cursor.execute(f"SELECT id FROM {table} WHERE {key} = %s", (record[key],))
                         assert cursor.fetchone() is None, "Generated lab identifier already exists"
-                self.save_manifest("reserved")  # Save exact identifiers BEFORE the first write.
+                self.save_manifest("reserved")  # 首次写入前保存准确的编号清单。
                 self.owned = True
                 for record in self.records["vehicle"]:
                     cursor.execute("INSERT INTO vehicle (vehicle_code, notes) VALUES (%s, %s)",
@@ -159,7 +159,7 @@ class WorkOrderLab:
         return fields
 
     def find_order(self, number):
-        # A newly opened connection cannot reuse an older transaction snapshot.
+        # 使用新连接核对，避免读到旧事务的快照。
         with self.connection() as connection:
             with connection.cursor() as cursor:
                 cursor.execute("SELECT * FROM work_order WHERE work_order_no = %s", (number,))
@@ -172,7 +172,7 @@ class WorkOrderLab:
         self.save_manifest("running")
 
     def cleanup(self):
-        # Release every surviving service/preparation connection before taking cleanup locks.
+        # 获取清理所需的锁之前，先释放业务调用和数据准备阶段仍打开的连接。
         release_failed = False
         for connection in self.connections:
             if connection.open:
@@ -192,7 +192,7 @@ class WorkOrderLab:
         with self.connection() as connection:
             preflight(connection)
             with connection.cursor() as cursor:
-                # All deletions belong to one transaction; a later mismatch rolls everything back.
+                # 全部删除操作共用一个事务；后续核对不匹配时，整体回滚。
                 for table in ("work_order", "battery", "vehicle"):
                     key = TABLE_KEYS[table]
                     for expected in self.records[table]:
@@ -200,7 +200,7 @@ class WorkOrderLab:
                         row = cursor.fetchone()
                         if row is None:
                             continue
-                        # Reserved but never submitted order numbers are NOT owned rows.
+                        # 仅预留、从未用于建单的编号，不能作为本次已创建记录来删除。
                         if table == "work_order" and "notes" not in expected:
                             raise AssertionError("Unexpected row at unused order number; cleanup stopped")
                         verify_owned(row, expected)

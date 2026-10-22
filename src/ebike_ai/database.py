@@ -1,4 +1,4 @@
-"""Explicit database configuration and connections; importing this opens nothing."""
+"""显式读取数据库配置并创建连接；导入本模块不会连接数据库。"""
 
 import os
 from dataclasses import dataclass, field
@@ -13,11 +13,11 @@ SQL_MODE = (
 
 
 class DatabaseConfigError(ValueError):
-    """Missing or invalid database configuration (never includes its values)."""
+    """数据库配置缺失或无效；错误信息不包含配置值。"""
 
 
 class DatabaseConnectionError(RuntimeError):
-    """Connection/setup failure with a credential-free message."""
+    """连接或初始化失败；错误信息不包含凭据。"""
 
 
 @dataclass(frozen=True)
@@ -53,7 +53,7 @@ class DatabaseConfig:
 
 
 def connect_database(config: DatabaseConfig):
-    """Caller owns commit/rollback/close; no shared connection or auto-commit."""
+    """由调用方负责提交、回滚和关闭；不共享连接，也不自动提交。"""
     try:
         return pymysql.connect(
             host=config.host,
@@ -72,7 +72,7 @@ def connect_database(config: DatabaseConfig):
             local_infile=False,
         )
     except (pymysql.MySQLError, OSError, RuntimeError) as exc:
-        # Never include the driver's message: it can contain connection details.
+        # 驱动原始错误可能包含连接信息，因此不能将其放入对外错误消息。
         code = exc.args[0] if exc.args and type(exc.args[0]) is int else None
         suffix = f" (MySQL error {code})" if code is not None else ""
         raise DatabaseConnectionError(

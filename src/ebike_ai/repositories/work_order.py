@@ -1,4 +1,4 @@
-"""Work order inserts; business checks and transactions belong to the caller."""
+"""读写工单数据；业务校验和事务由调用方负责。"""
 
 from datetime import datetime
 
@@ -14,7 +14,7 @@ class WorkOrderRepository:
         return self._get("work_order_no", work_order_no)
 
     def _get(self, column: str, value) -> dict | None:
-        # Column names are allowlisted constants; values are always bound.
+        # 列名只能使用白名单中的常量；查询值始终通过参数绑定传入。
         if column not in ("id", "work_order_no"):
             raise ValueError("Unsupported work order lookup")
         with self.connection.cursor() as cursor:
@@ -32,7 +32,7 @@ class WorkOrderRepository:
         report_source_note: str | None = None, received_at: datetime | None = None,
         notes: str | None = None,
     ) -> int:
-        """Insert a RECEIVED order; received_at is naive UTC or unknown (None)."""
+        """插入 RECEIVED 工单；received_at 为不带时区的 UTC 时间，未知时为 None。"""
         with self.connection.cursor() as cursor:
             cursor.execute(
                 "INSERT INTO work_order "

@@ -1,4 +1,4 @@
-"""Exercise the real pytest configuration in isolated, network-free subprocesses."""
+"""在隔离且禁止联网的子进程中验证项目实际使用的 pytest 配置。"""
 
 import json
 import os
@@ -15,7 +15,7 @@ PROJECT_ROOT = TEST_DIR.parent
 
 @pytest.fixture
 def policy_project(pytester, monkeypatch):
-    # The child reads config afresh; never inherit a real credential or run flag.
+    # 子进程重新读取配置，不继承真实凭据或启用真实服务的运行参数。
     monkeypatch.setenv("DASHSCOPE_API_KEY", "policy-test-placeholder")
     monkeypatch.delenv("PYTEST_ADDOPTS", raising=False)
     for name in list(os.environ):
@@ -27,7 +27,7 @@ def policy_project(pytester, monkeypatch):
         ".toml",
         pyproject=(PROJECT_ROOT / "pyproject.toml").read_text(encoding="utf-8"),
     )
-    # Reuse production test hooks/fixtures, rather than copying their logic.
+    # 直接加载项目实际使用的测试钩子和 fixture，避免复制实现导致验证失真。
     pytester.makeconftest(
         (TEST_DIR / "conftest.py").read_text(encoding="utf-8")
         + '''
@@ -169,7 +169,7 @@ def test_unknown_marker_is_a_collection_error(policy_project):
 
 @pytest.mark.parametrize("failing", [False, True], ids=["success", "failure"])
 def test_ci_selection_exit_status_and_reports(policy_project, failing):
-    """CI must exclude live cases and preserve failures in its exit code/reports."""
+    """CI 必须排除真实服务用例，并在退出码和报告中如实反映失败。"""
     (policy_project.path / "test_cases" / "test_db_excluded.py").write_text(
         "import pytest\n@pytest.mark.integration\n@pytest.mark.db\ndef test_db_excluded():\n"
         "    pytest.fail('CI must exclude MySQL even with --run-db')\n",
@@ -186,7 +186,7 @@ def test_ci_selection_exit_status_and_reports(policy_project, failing):
         "-m", "not live and not db", "-q", "-rs",
         "--junitxml=reports/ci/junit.xml",
         "--alluredir=reports/ci/allure-results",
-        # Even an accidentally supplied live flag must not override CI selection.
+    # 即使意外传入真实模型开关，也不能覆盖 CI 对用例的筛选。
         "--run-live",
         "--run-db",
         timeout=60,
@@ -218,7 +218,7 @@ def test_ci_selection_exit_status_and_reports(policy_project, failing):
     ((), True), (("-m", "db"), True), (("--run-live",), True), ((), False),
 ])
 def test_database_requires_its_own_flag(policy_project, monkeypatch, args, marked):
-    # Credentials alone must not authorize opening a real connection.
+    # 仅配置凭据不能视为允许建立真实数据库连接。
     monkeypatch.setenv("EBIKE_DB_USER", "fake-user")
     monkeypatch.setenv("EBIKE_DB_PASSWORD", "fake-password")
     monkeypatch.setenv("EBIKE_DB_NAME", "ebike_ai_day11")

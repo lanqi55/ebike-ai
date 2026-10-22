@@ -1,4 +1,4 @@
-"""Vehicle persistence for the Day 11 schema, without business workflow policy."""
+"""基于第 11 天表结构读写车辆数据，不处理业务流程规则。"""
 
 
 class VehicleRepository:
@@ -6,7 +6,7 @@ class VehicleRepository:
         self.connection = connection
 
     def create(self, vehicle_code: str, *, brand=None, model=None, notes=None) -> int:
-        """Insert inside the caller's transaction and return the generated ID."""
+        """在调用方的事务中插入车辆，并返回生成的 ID。"""
         with self.connection.cursor() as cursor:
             cursor.execute(
                 "INSERT INTO vehicle (vehicle_code, brand, model, notes) VALUES (%s, %s, %s, %s)",
@@ -15,7 +15,7 @@ class VehicleRepository:
             return cursor.lastrowid
 
     def get_by_id(self, vehicle_id: int) -> dict | None:
-        """Return all stored vehicle fields, or None when the ID does not exist."""
+        """返回车辆的全部已存字段；ID 不存在时返回 None。"""
         with self.connection.cursor() as cursor:
             cursor.execute(
                 "SELECT id, vehicle_code, brand, model, notes, created_at, updated_at "

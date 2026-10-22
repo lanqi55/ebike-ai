@@ -1,4 +1,4 @@
-"""Offline SQL contracts; these tests do not prove MySQL accepts the SQL."""
+"""离线验证 SQL 调用契约；不能据此证明 MySQL 能实际执行这些语句。"""
 
 from datetime import datetime
 from unittest.mock import MagicMock

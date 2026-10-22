@@ -1,4 +1,4 @@
-"""Offline configuration, connection policy and transaction ownership checks."""
+"""离线验证数据库配置、连接策略和事务管理职责。"""
 
 import traceback
 from unittest.mock import MagicMock

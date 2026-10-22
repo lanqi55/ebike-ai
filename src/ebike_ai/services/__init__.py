@@ -1,1 +1,1 @@
-"""Business workflows and their transaction boundaries."""
+"""业务流程及其事务边界。"""
