@@ -3,6 +3,8 @@
 from collections.abc import Callable
 from datetime import datetime
 
+import pymysql
+
 from ebike_ai.database import (
     DatabaseConfig, DatabaseConfigError, DatabaseConnectionError, connect_database,
 )
@@ -33,6 +35,14 @@ class BatteryVehicleMismatchError(WorkOrderError):
 
 
 class WorkOrderPersistenceError(WorkOrderError):
+    pass
+
+
+class DuplicateWorkOrderError(WorkOrderPersistenceError):
+    """An INSERT hit the business-number unique constraint."""
+
+
+class WorkOrderNotFoundError(WorkOrderError):
     pass
 
 
@@ -87,11 +97,18 @@ class WorkOrderService:
                     raise BatteryNotFoundError("Battery does not exist")
                 if battery["vehicle_id"] != vehicle_id:
                     raise BatteryVehicleMismatchError("Battery belongs to another vehicle")
-            work_order_id = WorkOrderRepository(connection).create(
-                work_order_no, vehicle_id, reported_symptom, report_source,
-                battery_id=battery_id, report_source_note=report_source_note,
-                received_at=received_at, notes=notes,
-            )
+            try:
+                work_order_id = WorkOrderRepository(connection).create(
+                    work_order_no, vehicle_id, reported_symptom, report_source,
+                    battery_id=battery_id, report_source_note=report_source_note,
+                    received_at=received_at, notes=notes,
+                )
+            except pymysql.IntegrityError as exc:
+                # No primary key is supplied; the only other unique key in the
+                # existing schema is uq_work_order_no. Never parse/log driver text.
+                if exc.args and exc.args[0] == 1062:
+                    raise DuplicateWorkOrderError("Work order number already exists") from None
+                raise
             committing = True
             connection.commit()
             committed = True
@@ -124,3 +141,42 @@ class WorkOrderService:
         if close_failed:
             raise WorkOrderCleanupError(work_order_id) from None
         return work_order_id
+
+    def get_by_id(self, work_order_id: int) -> dict:
+        return self._read("get_by_id", work_order_id)
+
+    def get_by_number(self, work_order_no: str) -> dict:
+        return self._read("get_by_number", work_order_no)
+
+    def _read(self, method: str, value) -> dict:
+        try:
+            connection = self.connection_factory()
+        except (DatabaseConfigError, DatabaseConnectionError):
+            raise
+        except Exception:
+            raise WorkOrderPersistenceError("Could not open work order connection") from None
+        error = None
+        rollback_failed = close_failed = False
+        try:
+            row = getattr(WorkOrderRepository(connection), method)(value)
+            if row is None:
+                error = WorkOrderNotFoundError("Work order does not exist")
+        except Exception:
+            error = WorkOrderPersistenceError("Could not read work order")
+        finally:
+            # End the read transaction too; no connection or snapshot is reused.
+            try:
+                connection.rollback()
+            except Exception:
+                rollback_failed = True
+            try:
+                connection.close()
+            except Exception:
+                close_failed = True
+        if error is None and (rollback_failed or close_failed):
+            error = WorkOrderPersistenceError("Could not finish work order read")
+        if error is not None:
+            error.rollback_failed = rollback_failed
+            error.close_failed = close_failed
+            raise error from None
+        return row

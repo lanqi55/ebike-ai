@@ -43,3 +43,46 @@ try {
 ### 当前证据
 
 2026-10-22：真实建单测试和独立清理 fixture 已实现；当前 Codex 进程没有数据库配置，真实 MySQL 尚未运行。离线测试验证清理边界和事务行为，不能证明 MySQL SQL、提交结果或锁等待正确。
+
+## Day 17–19：创建、查询与错误处理
+
+```text
+HTTP 请求 → Pydantic 校验 → WorkOrderService → Repository → MySQL
+HTTP 响应 ← 固定错误映射 / UTC 序列化 ← 事务完成及连接关闭
+```
+
+HTTP 层位于 [work_order_api.py](../src/ebike_ai/work_order_api.py)，以 router 接入现有 app。同步 PyMySQL 沿用同步端点；每次调用创建独立连接，Service 持有事务，Repository 不提交。查询也结束读事务、关闭连接，不复用快照。无数据库配置时 `/health`、`/docs`、`/openapi.json` 仍可使用。
+
+| 接口 | 输入与输出 |
+|---|---|
+| `POST /work-orders` | 必填 work_order_no、vehicle_id、reported_symptom、report_source；可选 battery_id、report_source_note、received_at、notes。成功 201，返回 id、work_order_no、固定初始状态 RECEIVED、可空 warning |
+| `GET /work-orders/{id}` | 按正整数内部 ID 查详情，不存在 404 |
+| `GET /work-orders/by-number/{work_order_no}` | 按唯一业务编号查详情；编号作为 URL 路径时需要编码，包含 `/` 的编号也支持 |
+
+业务编号去除首尾空白后为 1–32 字符；故障描述去除首尾空白后非空。请求中的 ID 必须是 JSON 正整数，不能用布尔值或数字字符串代替，上限与 BIGINT UNSIGNED 一致。来源只接受现有表中的五个枚举。文本不得超过 MySQL TEXT 的 65535 UTF-8 字节。额外字段被拒绝，不能直接提交状态或完工结果。
+
+`received_at` 未提供或 null 表示未知，不自动补当前时间；提供时使用带时区的 ISO 8601 字符串，转换为 UTC 后存入 DATETIME。查询输出显式 UTC 时间，例如 `2026-10-22T08:30:00Z`；未知值保持 null。
+
+| 情况 | HTTP | detail.code / 行为 |
+|---|---|---|
+| 请求模型校验失败 | 422 | FastAPI 标准验证错误列表，不调用 Service |
+| 车辆、电池、工单不存在 | 404 | VEHICLE_NOT_FOUND / BATTERY_NOT_FOUND / WORK_ORDER_NOT_FOUND |
+| 电池不属于该车 | 409 | BATTERY_VEHICLE_MISMATCH |
+| 编号重复 | 409 | DUPLICATE_WORK_ORDER；不会覆盖原单，也不自动换编号 |
+| 数据库配置缺失、连接失败 | 503 | DATABASE_NOT_CONFIGURED / DATABASE_UNAVAILABLE |
+| 数据库读写失败 | 503 | DATABASE_OPERATION_FAILED |
+| commit 响应异常 | 503 | COMMIT_OUTCOME_UNKNOWN；按原编号核对，不自动重试创建 |
+| commit 成功、close 失败 | 201 | 返回已保存 ID 和 warning，不回滚、不重新创建 |
+| 未预期内部错误 | 500 | INTERNAL_ERROR；固定提示，不透传驱动消息 |
+
+除 422 外，错误体为 `{"detail":{"code":"...","message":"..."}}`。编号重复是冲突检测，并非完整幂等协议。提交结果未知时，查询不到也不能立刻断定失败或换编号重建；查询本身不可用时结果继续保持未知，需待数据库恢复后核对。
+
+原 Day 13 的重复编号统一持久化异常已细化为 `DuplicateWorkOrderError`（仍继承 `WorkOrderPersistenceError`）；只将 INSERT 阶段的 1062 映射为编号冲突，commit 阶段的异常继续视为结果未知。当前表 INSERT 不指定主键，唯一业务约束为 uq_work_order_no；以后修改唯一键或触发器时必须复核此判断。
+
+离线验证命令：
+
+```powershell
+.\venv\Scripts\python.exe -m pytest test_cases/test_work_order_api.py test_cases/test_work_order_service.py test_cases/test_work_order_repositories.py test_cases/test_api.py -q -rs
+```
+
+2026-10-22 实测 **103 passed、2 warnings**。其中 API 用假 Service 验证 HTTP 契约，Service 用假连接验证事务、清理与脱敏，Repository 验证 SQL 参数绑定；均不是 MySQL 实测结果。

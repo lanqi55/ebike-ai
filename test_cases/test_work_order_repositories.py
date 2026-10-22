@@ -69,3 +69,19 @@ def test_repository_leaves_driver_errors_and_cleanup_to_caller(repository):
             WorkOrderRepository(connection).create("D13-test", 10, "灯不亮", "CUSTOMER_STATEMENT")
     assert caught.value is driver_error
     assert_caller_owns_transaction(connection)
+
+
+@pytest.mark.parametrize("method,column,value", [
+    ("get_by_id", "id", 51), ("get_by_number", "work_order_no", "O'Brien');--"),
+])
+@pytest.mark.parametrize("row", [None, {"id": 51, "battery_id": None}])
+def test_work_order_lookup_binds_values_and_preserves_missing(method, column, value, row):
+    connection = MagicMock()
+    cursor = connection.cursor.return_value.__enter__.return_value
+    cursor.fetchone.return_value = row
+    assert getattr(WorkOrderRepository(connection), method)(value) == row
+    sql, params = cursor.execute.call_args.args
+    assert sql.endswith(f"FROM work_order WHERE {column} = %s")
+    assert params == (value,)
+    assert "created_at, updated_at" in sql
+    assert_caller_owns_transaction(connection)

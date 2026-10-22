@@ -11,6 +11,7 @@ from ebike_ai.database import DatabaseConfigError, DatabaseConnectionError
 from ebike_ai.services import work_order as service_module
 from ebike_ai.services.work_order import (
     BatteryNotFoundError, BatteryVehicleMismatchError, VehicleNotFoundError,
+    DuplicateWorkOrderError, WorkOrderNotFoundError,
     WorkOrderCleanupError, WorkOrderCommitUnknownError, WorkOrderPersistenceError,
     WorkOrderService,
 )
@@ -204,3 +205,71 @@ def test_interruption_still_rolls_back_and_closes():
     connection.rollback.assert_called_once_with()
     connection.close.assert_called_once_with()
     connection.commit.assert_not_called()
+
+
+@pytest.mark.parametrize("stage,code,expected", [
+    ("insert", 1062, DuplicateWorkOrderError),
+    ("insert", 1452, WorkOrderPersistenceError),
+    ("query", 1062, WorkOrderPersistenceError),
+    ("commit", 1062, WorkOrderCommitUnknownError),
+])
+def test_only_insert_duplicate_maps_to_business_conflict(stage, code, expected):
+    connection, cursor = fake_connection([{"id": 10}])
+    failure = pymysql.IntegrityError(code, SENSITIVE)
+    if stage == "commit":
+        connection.commit.side_effect = failure
+    else:
+        cursor.execute.side_effect = [failure] if stage == "query" else [None, failure]
+    with pytest.raises(expected) as caught:
+        create_order(WorkOrderService(lambda: connection))
+    assert type(caught.value) is expected
+    assert_sanitized(caught.value)
+    connection.rollback.assert_called_once_with()
+    connection.close.assert_called_once_with()
+
+
+@pytest.mark.parametrize("method,value", [("get_by_id", 51), ("get_by_number", "O'Brien')--")])
+def test_reads_use_fresh_connections_and_finish_transactions(method, value):
+    row = {"id": 51}
+    first, first_cursor = fake_connection([row])
+    second, _ = fake_connection([None])
+    service = WorkOrderService(MagicMock(side_effect=[first, second]))
+    assert getattr(service, method)(value) == row
+    with pytest.raises(WorkOrderNotFoundError):
+        getattr(service, method)(value)
+    assert first_cursor.execute.call_args.args[1] == (value,)
+    for connection in (first, second):
+        connection.commit.assert_not_called()
+        connection.rollback.assert_called_once_with()
+        connection.close.assert_called_once_with()
+
+
+@pytest.mark.parametrize("stage", ["query", "rollback", "close"])
+def test_read_failures_are_sanitized_and_always_close(stage):
+    connection, cursor = fake_connection([{"id": 51}])
+    target = cursor.execute if stage == "query" else getattr(connection, stage)
+    target.side_effect = RuntimeError(SENSITIVE)
+    with pytest.raises(WorkOrderPersistenceError) as caught:
+        WorkOrderService(lambda: connection).get_by_id(51)
+    assert_sanitized(caught.value)
+    connection.rollback.assert_called_once_with()
+    connection.close.assert_called_once_with()
+    connection.commit.assert_not_called()
+
+
+def test_read_not_found_survives_cleanup_failure():
+    connection, _ = fake_connection([None])
+    connection.close.side_effect = RuntimeError(SENSITIVE)
+    with pytest.raises(WorkOrderNotFoundError) as caught:
+        WorkOrderService(lambda: connection).get_by_id(51)
+    assert caught.value.close_failed
+    assert_sanitized(caught.value)
+
+
+def test_read_interruption_still_releases_connection():
+    connection, cursor = fake_connection([])
+    cursor.execute.side_effect = KeyboardInterrupt()
+    with pytest.raises(KeyboardInterrupt):
+        WorkOrderService(lambda: connection).get_by_id(51)
+    connection.rollback.assert_called_once_with()
+    connection.close.assert_called_once_with()

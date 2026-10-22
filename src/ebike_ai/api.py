@@ -9,6 +9,7 @@ from ebike_ai.core.react_loop import AgentLoop
 from ebike_ai.tools.hardware_tools import create_hardware_tools
 from ebike_ai.tools.knowledge_tools import create_knowledge_tools
 from ebike_ai.config import config
+from ebike_ai.work_order_api import router as work_order_router
 
 
 # ========== 1. 定义"入参 / 出参"结构（Pydantic 自动校验） ==========
@@ -58,6 +59,7 @@ def build_agent() -> AgentLoop:
 
 
 app = FastAPI(title="电动车维修诊断 API", version="0.1.0")
+app.include_router(work_order_router)
 # agent = build_agent()
 agent = None   # 惰性初始化：import 时不建，第一次请求才建
 

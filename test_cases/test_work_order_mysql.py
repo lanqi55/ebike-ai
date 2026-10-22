@@ -4,7 +4,7 @@ import pytest
 
 from ebike_ai.services.work_order import (
     BatteryNotFoundError, BatteryVehicleMismatchError, VehicleNotFoundError,
-    WorkOrderPersistenceError, WorkOrderService,
+    DuplicateWorkOrderError, WorkOrderService,
 )
 
 
@@ -45,7 +45,7 @@ def test_duplicate_number_preserves_original(work_order_lab):
     service = WorkOrderService(lab.connect)
     original_id = service.create_work_order(**fields)
     original = lab.find_order(fields["work_order_no"])
-    with pytest.raises(WorkOrderPersistenceError):
+    with pytest.raises(DuplicateWorkOrderError):
         service.create_work_order(**{**fields, "reported_symptom": "不得覆盖原单"})
     assert lab.find_order(fields["work_order_no"]) == original
     assert original["id"] == original_id
