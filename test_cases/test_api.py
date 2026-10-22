@@ -59,7 +59,7 @@ def test_diagnose_ok(monkeypatch,client):
 
             # ③ 返回一个元组（answer, state），跟真 AgentLoop.run 的返回一致
             return answer, state
-    monkeypatch.setattr(api, "agent", FakeAgent())
+    monkeypatch.setattr(api, "build_agent", FakeAgent)
     resp = client.post("/diagnose", json={"fault_text": "电动车起步无力"})
     assert resp.status_code == 200
     # 再断言：返回的 JSON 里 answer 是填的那个字符串
@@ -72,7 +72,7 @@ def test_diagnose_error(monkeypatch,client):
         def run(self, query):
             # raise 一个异常
             raise Exception("模拟 LLM 挂了")
-    monkeypatch.setattr(api, "agent", FakeAgent())
+    monkeypatch.setattr(api, "build_agent", FakeAgent)
     resp = client.post("/diagnose", json={"fault_text": "电动车起步无力"})
     assert resp.status_code == 500
 

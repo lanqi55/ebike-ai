@@ -40,7 +40,7 @@ class EvaluateRequest(BaseModel):
     cases: list[TestCase]
 
 
-# ========== 2. 构建 Agent（模块加载时建一次，之后所有请求复用） ==========
+# ========== 2. 构建请求独占的 Agent ==========
 
 def build_agent() -> AgentLoop:
     """把 LLM + 工具组装成 Agent（逻辑和 main_agent.py 一样）"""
@@ -60,8 +60,6 @@ def build_agent() -> AgentLoop:
 
 app = FastAPI(title="电动车维修诊断 API", version="0.1.0")
 app.include_router(work_order_router)
-# agent = build_agent()
-agent = None   # 惰性初始化：import 时不建，第一次请求才建
 
 
 # ========== 3. 诊断接口 ==========
@@ -70,11 +68,9 @@ agent = None   # 惰性初始化：import 时不建，第一次请求才建
 # FastAPI 会把 def 端点丢进线程池跑，不卡事件循环；用 async def 反而会阻塞整个服务。
 @app.post("/diagnose", response_model=DiagnoseResponse)
 def diagnose(req: DiagnoseRequest):
-    global agent  # 要修改模块级 agent，必须声明 global
     """接收故障描述，返回诊断结果 + 诊断过程摘要"""
     try:
-        if agent is None:
-            agent = build_agent()  # 第一次请求才建，之后复用
+        agent = build_agent()
         answer, state = agent.run(req.fault_text)
     except Exception as e:
         # 诊断出错 → 返回 500，而不是让接口直接崩掉
