@@ -8,6 +8,7 @@
 - **RAG 知识库**：Chroma 向量检索，语义匹配维修方案
 - **LLM 评测平台**：5 维度 Judge（关键词/格式/幻觉/工具调用/鲁棒性）+ 3 项性能指标（延迟/死循环/成功率）
 - **FastAPI 服务化**：`POST /diagnose`（诊断）+ `POST /evaluate`（评测）
+- **维修工单 API**：为已有车辆创建工单、按 ID / 业务编号查询；校验电池归属，区分重复编号、提交结果未知与已保存后的清理警告
 - **CI**：GitHub Actions 自动跑离线测试，保留 JUnit / Allure 结果；真实模型评测在本地显式开启
 
 ## 🛠 技术栈
@@ -20,7 +21,8 @@ Python · FastAPI · LangChain · ChromaDB · 通义千问 · Pytest · Pandas �
 ebike_ai/
 ├── src/
 │   └── ebike_ai/           # 所有代码（src 布局）
-│       ├── api.py          #   FastAPI 服务（/diagnose + /evaluate）
+│       ├── api.py          #   FastAPI 服务及工单 router
+│       ├── work_order_api.py # 工单请求/响应及 HTTP 错误映射
 │       ├── main_agent.py   #   Agent 模式入口（命令行）
 │       ├── build_rag.py    #   构建 RAG 知识库
 │       ├── config.py       #   配置集中管理
@@ -41,6 +43,7 @@ ebike_ai/
 |---|---|---|
 | A：基础运行 | 安装依赖时需要联网；不需要 API Key、ESP32 或向量库 | 离线测试、模拟数据、API 启动与入参校验 |
 | B：完整诊断 | 先完成 A，再准备有效 DashScope Key、联网和模型额度 | RAG 构建与真实诊断；本文提供操作说明，本次未实测 |
+| C：维修工单 | 已有 MySQL 练习库、数据库配置；不需要模型 Key | 创建、查询、失败路径；操作说明见[第三周实验](docs/week3-work-order-api.md)，真实 MySQL 与浏览器演示待本机验收 |
 
 ### A1. 创建环境并安装
 
@@ -64,7 +67,7 @@ py -3.10 -m venv .venv
 .\.venv\Scripts\python.exe -m pytest -q -rs
 ```
 
-预期：`115 passed, 6 skipped`；两条真实模型测试需要 `--run-live`，四条真实 MySQL 测试需要 `--run-db`，仅配置凭据不会开启调用。这里的“离线”指测试不依赖真实模型或 MySQL，依赖安装仍需要联网。跳过原因由 `-rs` 展示；跳过不等于通过。
+预期：`201 passed, 19 skipped`；两条真实模型测试需要 `--run-live`，17 条真实 MySQL 测试需要 `--run-db`，仅配置凭据不会开启调用。这里的“离线”指测试不依赖真实模型或 MySQL，依赖安装仍需要联网。跳过原因由 `-rs` 展示；跳过不等于通过。
 
 ### A3. 生成并读取模拟数据
 
@@ -200,7 +203,7 @@ Invoke-RestMethod -Uri "$apiUrl/health"
 .\.venv\Scripts\python.exe -m pytest -q -rs
 ```
 
-当前默认预期为 **115 条通过、6 条跳过**（Day 12 的 88 条离线用例 + 27 条建单 Repository/Service 单元测试；跳过的是 2 条真实模型和 4 条真实 MySQL 测试）。配置凭据不等于授权调用；模型和数据库分别由 `--run-live`、`--run-db` 开启，只选 marker 或直接指定测试路径不会开启真实调用。
+当前默认预期为 **201 条通过、19 条跳过**（第三周新增 86 条离线检查和 13 条真实数据库场景；跳过的是 2 条真实模型和 17 条真实 MySQL 测试）。配置凭据不等于授权调用；模型和数据库分别由 `--run-live`、`--run-db` 开启，只选 marker 或直接指定测试路径不会开启真实调用。
 [`pip check`](https://pip.pypa.io/en/stable/cli/pip_check/) 只检查已安装包所声明的依赖是否兼容，不能发现项目忘记声明的包，也不证明业务功能正确。
 
 ### 分类与运行命令
@@ -209,11 +212,11 @@ Invoke-RestMethod -Uri "$apiUrl/health"
 
 | marker | 当前数量 | 验证内容 |
 |---|---:|---|
-| `unit` | 79 | 电压计算与校验、指标、工具边界、假依赖下的 Agent 控制逻辑、数据库配置、Repository 与建单 Service |
-| `integration` | 40 | API、日志、Agent 工具调用链、pytest 开关与 CI、数据库 fixture 清理；含 4 条需显式开启的真实 MySQL 用例 |
+| `unit` | 110 | 电压计算与校验、指标、工具边界、假依赖下的 Agent 控制逻辑、数据库配置、Repository、建单与查询 Service、测试数据清理及演示开关 |
+| `integration` | 108 | API、日志、Agent 工具调用链、pytest 开关与 CI、数据库 fixture 清理；含 17 条需显式开启的真实 MySQL 用例 |
 | `evaluation` | 2 | Agent 诊断质量；当前两条同时标记 `live` |
 | `live` | 2（与 evaluation 重叠） | 需要真实模型或 Embedding，默认跳过 |
-| `db` | 4（与 integration 重叠） | 真实 MySQL 的读写、唯一约束、回滚；默认跳过 |
+| `db` | 17（与 integration 重叠） | 真实 MySQL 的读写、唯一约束、回滚、建单提交及工单 HTTP 链路；默认跳过 |
 
 ```powershell
 # 分别运行离线单元测试和集成测试
@@ -229,18 +232,18 @@ Invoke-RestMethod -Uri "$apiUrl/health"
 
 ### 显式运行真实 MySQL 测试
 
-数据库连接配置、原生 SQL 实现与本机密码输入步骤见 [第 12 天实验](docs/day12-python-mysql.md)。使用已有的 `ebike_ai_day11` 练习库，预检表结构后才写入；测试最终回滚，不自动建表或清库。
+数据库连接配置、原生 SQL 实现与本机密码输入步骤见 [第 12 天实验](docs/day12-python-mysql.md)。使用已有的 `ebike_ai_day11` 练习库，预检表结构后才写入；Day 12 四条测试最终回滚，第三周测试会提交并精确清理本次数据，不自动建表或清库。
 
-最小建单 Service、车辆与电池归属校验、事务失败处理见 [第 13 天实验](docs/day13-work-order-service.md)。目前完成离线行为验证，尚未接入 API，未验证真实建单提交持久化或并发锁行为。
+最小建单 Service、车辆与电池归属校验、事务失败处理的历史记录见 [第 13 天实验](docs/day13-work-order-service.md)。当前已接入创建及查询 API，离线行为已验证；真实建单提交和并发锁效果尚未实测。
 
-第二周复盘、三小时计划、六道题的学习记录及真实建单验证方案见 [第 14 天复盘](docs/day14-week2-retrospective.md)。数据库验证方案尚未执行，学习待办与实测证据分别记录。
+第二周复盘与学习记录见 [第 14 天复盘](docs/day14-week2-retrospective.md)。第三周的真实建单测试、接口契约、错误码、Swagger 演示和精确清理步骤见 [第三周工单 API 实验](docs/week3-work-order-api.md)。学习待办与实测证据分别记录。
 
 ```powershell
 # 先按实验文档在同一终端设置 EBIKE_DB_*；不要把密码写进命令字面量
 .\.venv\Scripts\python.exe -m pytest -m db --run-db -q -rs
 ```
 
-预期 **4 passed**。显式开启后缺配置或连接失败会报错；默认跳过不能算作数据库验证成功。`--run-db` 不开启真实模型，`--run-live` 也不启用 MySQL。当前数据库模块尚未接入 API。
+预期 **17 passed**。显式开启后缺配置或连接失败会报错；默认跳过不能算作数据库验证成功。`--run-db` 不开启真实模型，`--run-live` 也不启用 MySQL。第三周测试需要三张练习表的 SELECT、INSERT、DELETE 权限；运行清单保存在已忽略的 `reports/week3/manifests/`，清理失败时必须核对残留，不要清空表。
 
 ### 显式运行真实模型测试（可能产生费用）
 
@@ -282,7 +285,7 @@ if ($LASTEXITCODE -ne 0) { throw "依赖检查失败" }
 if ($LASTEXITCODE -ne 0) { throw "离线测试失败，请查看 reports/ci/" }
 ```
 
-当前预期为 **115 passed、6 deselected**。默认 pytest 的 `6 skipped` 表示收集后跳过；CI 的 `6 deselected` 表示被筛选排除，两者都不证明真实模型或 MySQL 测试通过。本地命令额外使用 `--clean-alluredir` 清理该目录的旧 Allure 结果，避免重复运行混入历史报告；CI 每次使用干净的 runner。
+当前预期为 **201 passed、19 deselected**。默认 pytest 的 `19 skipped` 表示收集后跳过；CI 的 `19 deselected` 表示被筛选排除，两者都不证明真实模型或 MySQL 测试通过。本地命令额外使用 `--clean-alluredir` 清理该目录的旧 Allure 结果，避免重复运行混入历史报告；CI 每次使用干净的 runner。
 
 pytest 直接把退出码交给 CI，没有 `continue-on-error` 或 `|| true`；测试失败会让检查变红。报告上传步骤使用 `always()`，在普通测试失败后仍上传 `offline-test-results`，保留 7 天，包含 JUnit XML 和 Allure 原始结果（不是 HTML 报告）。如果依赖安装失败，可能尚无报告，应查看失败步骤日志。退出码和失败处理依据 [pytest 文档](https://docs.pytest.org/en/stable/reference/exit-codes.html)与 [GitHub Actions 文档](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#jobsjob_idstepscontinue-on-error)。
 

@@ -17,6 +17,7 @@ def test_commit_visible_from_new_connection(work_order_lab, with_battery):
     battery_id = lab.records["battery"][0]["id"] if with_battery else None
     fields = lab.order(battery_id=battery_id)
     order_id = WorkOrderService(lab.connect).create_work_order(**fields)
+    lab.remember_order_id(order_id)
     row = lab.find_order(fields["work_order_no"])
     assert row["id"] == order_id
     assert all(row[key] == value for key, value in fields.items())
@@ -44,6 +45,7 @@ def test_duplicate_number_preserves_original(work_order_lab):
     fields = lab.order()
     service = WorkOrderService(lab.connect)
     original_id = service.create_work_order(**fields)
+    lab.remember_order_id(original_id)
     original = lab.find_order(fields["work_order_no"])
     with pytest.raises(DuplicateWorkOrderError):
         service.create_work_order(**{**fields, "reported_symptom": "不得覆盖原单"})

@@ -86,3 +86,72 @@ HTTP 层位于 [work_order_api.py](../src/ebike_ai/work_order_api.py)，以 rout
 ```
 
 2026-10-22 实测 **103 passed、2 warnings**。其中 API 用假 Service 验证 HTTP 契约，Service 用假连接验证事务、清理与脱敏，Repository 验证 SQL 参数绑定；均不是 MySQL 实测结果。
+
+## Day 20：HTTP 到真实 MySQL，以及 Swagger 演示
+
+完成上面的本机配置后，在清除密码前运行：
+
+```powershell
+.\venv\Scripts\python.exe -m pytest test_cases/test_work_order_mysql.py test_cases/test_work_order_api_mysql.py --run-db -q -rs --tb=short
+```
+
+预期 **13 passed**，包含 6 条 Service 场景和 7 条 HTTP 场景。HTTP 测试通过真实 app、Pydantic、Service、Repository、MySQL，仅替换连接工厂以追踪清理，不是假数据库。TestClient 是进程内 HTTP 测试，不等于浏览器或真实 TCP/Uvicorn 验收。若执行全部数据库测试 `-m db --run-db`，加上 Day 12 的 4 条后预期 **17 passed**。任一失败先处理，不继续演示。
+
+Swagger 演示使用两个 PowerShell 终端，都进入项目根目录、各自按前文配置 `EBIKE_DB_*`，并移除 `DASHSCOPE_API_KEY`。仅监听本机，不需要模型、硬件日志或向量库。
+
+终端 A 启动 API：
+
+```powershell
+.\venv\Scripts\python.exe -m uvicorn ebike_ai.api:app --host 127.0.0.1 --port 8000
+```
+
+终端 B 准备独立演示数据并保持运行：
+
+```powershell
+.\venv\Scripts\python.exe -m scripts.work_order_demo --run-db
+```
+
+这是仓库内教学脚本，复用测试数据隔离与清理工具，不随生产包安装。它只允许练习库，打印随机编号、测试车辆 ID 和两份 JSON，不打印凭据。
+
+在 [本机 Swagger](http://127.0.0.1:8000/docs) 完成：
+
+1. 展开“维修工单”，将终端 B 的两份 JSON 分别原样提交到 `POST /work-orders`，预期 201，记下各自 ID。
+2. 按 ID、按业务编号查询，两种结果应一致，车辆、电池、状态、未知时间字段与请求相符。
+3. 重复提交第一份 JSON，预期 409、`DUPLICATE_WORK_ORDER`，再次查询原单内容不变。
+4. 将第一份 JSON 的 vehicle_id 临时改为 0，预期 422；不要提交其他有效的新编号或修改已登记请求内容。
+5. 回到终端 B 按 Enter。脚本核对并清理本次演示记录；查看对应 manifest 的 `state` 为 `cleaned`。再查询原工单，预期 404。
+6. 停止终端 A 的 API，在两个终端清除 `EBIKE_DB_PASSWORD`。端口冲突时同时调整 API 启动端口和浏览器地址，不停止其他进程。
+
+如果修改了已登记请求的有效内容，清理工具会因内容不匹配而停止，这是为了避免误删；保留 manifest 后人工核对，不重新运行脚本冒充上次清理完成。浏览器 `/docs` 需要加载 Swagger CDN，页面无法加载时先区分前端资源问题与 API 故障。
+
+## Day 21：回归与学习验收
+
+```powershell
+Remove-Item Env:DASHSCOPE_API_KEY -ErrorAction SilentlyContinue
+Remove-Item Env:PYTEST_ADDOPTS -ErrorAction SilentlyContinue
+.\venv\Scripts\python.exe -m pip check
+.\venv\Scripts\python.exe -m pytest -q -rs --junitxml=reports/week3/junit.xml
+```
+
+分别记录离线、真实 MySQL、Swagger 演示的实际结果。默认跳过真实服务测试，不能把跳过写成通过；报告和 manifest 均留在已忽略的 reports 中。
+
+每天约 3 小时：20 分钟回顾、40 分钟学一个概念、80 分钟实现与走查、25 分钟验证、15 分钟记录及提交。今天已生成的代码可以分日阅读和复验，不要求一天消化整周内容。
+
+独立回答以下问题，再对照代码验证，答案未收到前保持“待学习验收”：
+
+- 为什么 Pydantic 校验合法仍不能证明电池属于该车？是哪一层负责归属？
+- 为什么 Repository 不提交，而 Service 使用一个独占连接管理整项操作？
+- 为什么同连接查到记录不代表已提交？新连接查询又不能证明哪些事情？
+- 为什么同样是接口报错，commit 未知与重复编号要采用不同处理？
+- 为什么关闭连接失败时仍可能返回 201？返回 201 为什么不代表维修完成？
+- 哪些分支可以用假连接验证，哪些结论必须用真实 MySQL、HTTP 或并发实验验证？
+
+本周未实现诊断隔离、完整幂等协议、连接池、并发锁实验或维修业务闭环；原 `/diagnose` 的全局 Agent 与异常透传风险仍待后续处理。工单接口不调用 Agent，也不把它的风险记为已经修复。
+
+### 本轮验证记录（2026-10-22）
+
+- 全量离线：`201 passed、19 skipped、2 warnings`，160.20 秒；JUnit：`reports/week3/junit.xml`。跳过 2 条真实模型和 17 条真实数据库测试。
+- 收集分类：unit 110、integration 108（含 db 17）、evaluation 2（同时 live），共 220 条。`pip check` 通过。
+- 临时启动真实 Uvicorn、清除子进程模型与数据库配置后，HTTP `/health`、`/docs` 返回 200；OpenAPI 包含工单路由，创建工单返回 503、DATABASE_NOT_CONFIGURED。验证后停止本次服务，没有连接 MySQL 或模型。
+- 演示脚本 `--help` 可运行；离线测试验证未开启 `--run-db` 时不读取配置，以及中断/失败时的清理尝试和脱敏。
+- 真实 MySQL、浏览器 Swagger 交互、并发锁行为与学习独立复述均未验收；远端 CI 本轮未核验。两条弃用警告未在本次升级依赖处理。

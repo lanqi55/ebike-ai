@@ -62,7 +62,7 @@ def preflight(connection):
         cursor.execute(
             "SELECT TABLE_NAME, COLUMN_NAME, REFERENCED_TABLE_NAME, REFERENCED_COLUMN_NAME "
             "FROM information_schema.KEY_COLUMN_USAGE WHERE TABLE_SCHEMA = DATABASE() "
-            "AND REFERENCED_TABLE_NAME IS NOT NULL"
+            "AND REFERENCED_TABLE_SCHEMA = DATABASE() AND REFERENCED_TABLE_NAME IS NOT NULL"
         )
         foreign_keys = {(r["TABLE_NAME"], r["COLUMN_NAME"], r["REFERENCED_TABLE_NAME"],
                          r["REFERENCED_COLUMN_NAME"]) for r in cursor.fetchall()}
@@ -166,6 +166,10 @@ class WorkOrderLab:
                 rows = cursor.fetchall()
                 assert len(rows) <= 1
                 return rows[0] if rows else None
+
+    def remember_order_id(self, order_id, *, index=0):
+        self.records["work_order"][index]["id"] = order_id
+        self.save_manifest("running")
 
     def cleanup(self):
         # Release every surviving service/preparation connection before taking cleanup locks.
