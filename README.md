@@ -233,6 +233,8 @@ Invoke-RestMethod -Uri "$apiUrl/health"
 
 最小建单 Service、车辆与电池归属校验、事务失败处理见 [第 13 天实验](docs/day13-work-order-service.md)。目前完成离线行为验证，尚未接入 API，未验证真实建单提交持久化或并发锁行为。
 
+第二周复盘、三小时计划、六道题的学习记录及真实建单验证方案见 [第 14 天复盘](docs/day14-week2-retrospective.md)。数据库验证方案尚未执行，学习待办与实测证据分别记录。
+
 ```powershell
 # 先按实验文档在同一终端设置 EBIKE_DB_*；不要把密码写进命令字面量
 .\.venv\Scripts\python.exe -m pytest -m db --run-db -q -rs
