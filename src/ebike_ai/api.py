@@ -4,10 +4,7 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 
 from langchain_community.chat_models import ChatTongyi
-from ebike_ai.core.tool_registry import ToolRegistry
-from ebike_ai.core.react_loop import AgentLoop
-from ebike_ai.tools.hardware_tools import create_hardware_tools
-from ebike_ai.tools.knowledge_tools import create_knowledge_tools
+from ebike_ai.agent_factory import build_agent
 from ebike_ai.config import config
 from ebike_ai.work_order_api import router as work_order_router
 
@@ -41,22 +38,6 @@ class EvaluateRequest(BaseModel):
 
 
 # ========== 2. 构建请求独占的 Agent ==========
-
-def build_agent() -> AgentLoop:
-    """把 LLM + 工具组装成 Agent（逻辑和 main_agent.py 一样）"""
-    llm = ChatTongyi(
-        model=config.llm.model,
-        dashscope_api_key=config.llm.api_key,
-        temperature=config.llm.temperature,
-        model_kwargs={"max_tokens": config.llm.max_tokens},
-    )
-    registry = ToolRegistry()
-    for tool in create_hardware_tools():
-        registry.register(tool)
-    for tool in create_knowledge_tools():
-        registry.register(tool)
-    return AgentLoop(llm=llm, registry=registry, max_iter=10)
-
 
 app = FastAPI(title="电动车维修诊断 API", version="0.1.0")
 app.include_router(work_order_router)
