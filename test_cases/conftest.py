@@ -25,6 +25,34 @@ from ebike_ai.tools.knowledge_tools import create_knowledge_tools
 pytest_plugins = ["pytester"]
 
 
+@pytest.fixture
+def work_order_lab(request):
+    """Explicit, committed-data tests; separate from the rollback-only Day 12 fixture."""
+    if not request.config.getoption("--run-db"):
+        pytest.skip("Work order lab requires --run-db")
+    from ebike_ai.database import DatabaseConfig, DatabaseConfigError
+    from test_cases.mysql_work_orders import WorkOrderLab
+
+    try:
+        settings = DatabaseConfig.from_env()
+    except DatabaseConfigError as exc:
+        pytest.fail(str(exc), pytrace=False)
+    if settings.database != "ebike_ai_day11":
+        pytest.fail("Work order lab only allows ebike_ai_day11", pytrace=False)
+    lab = WorkOrderLab(settings, os.path.join(PROJECT_ROOT, "reports", "week3", "manifests"))
+    try:
+        try:
+            lab.prepare()
+        except Exception:
+            pytest.fail("Work order lab setup failed; check local database and schema (details suppressed)", pytrace=False)
+        yield lab
+    finally:
+        try:
+            lab.cleanup()
+        except Exception:
+            pytest.fail(f"Work order lab cleanup failed; inspect exact identifiers in {lab.manifest_path}", pytrace=False)
+
+
 def pytest_addoption(parser):
     parser.addoption(
         "--run-db", action="store_true", default=False,
