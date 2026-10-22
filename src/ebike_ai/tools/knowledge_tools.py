@@ -2,7 +2,8 @@
 
 from ebike_ai.embedding_utils import MyDashScopeEmbedding
 from langchain_chroma import Chroma
-from ebike_ai.core.tool_registry import Tool
+from ebike_ai.core.tool_registry import Tool, SearchArguments
+from pydantic import TypeAdapter
 from ebike_ai.config import config
 
 # 向量库路径
@@ -27,7 +28,7 @@ def search_repair_knowledge(query: str) -> str:
 
     # 把检索到的文档拼接成一个字符串返回
     if not docs:
-        return "未找到相关维修资料"
+        return ""
     return "\n\n".join(doc.page_content for doc in docs)
 
 
@@ -39,16 +40,8 @@ def create_knowledge_tools():
         name="search_repair_knowledge",
         description="搜索电动车维修知识库，输入故障描述，返回相关的维修手册内容",
         func=search_repair_knowledge,
-        parameters={
-            "type": "object",
-            "properties": {
-                "query": {
-                    "type": "string",
-                    "description": "故障描述或关键词，如'电池电压低'、'起步无力'"
-                }
-            },
-            "required": ["query"]
-        }
+        args_model=SearchArguments,
+        output_validator=lambda value: TypeAdapter(str).validate_python(value, strict=True),
     )
     tools.append(tool)
     return tools

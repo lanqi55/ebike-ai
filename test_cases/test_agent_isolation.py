@@ -10,7 +10,7 @@ from langchain_core.messages import AIMessage
 
 from ebike_ai import api
 from ebike_ai.core.react_loop import AgentLoop
-from ebike_ai.core.tool_registry import Tool, ToolRegistry
+from ebike_ai.core.tool_registry import Tool, ToolRegistry, SearchArguments
 
 pytestmark = pytest.mark.integration
 
@@ -40,10 +40,8 @@ def make_agent(observed, barrier=None, fail_query=None):
     llm = FakeLLM()
     observed.append(llm)
     registry = ToolRegistry()
-    registry.register(Tool("echo", "回显测试输入", lambda query: {"query": query}, {
-        "type": "object", "properties": {"query": {"type": "string"}},
-        "required": ["query"],
-    }))
+    registry.register(Tool("echo", "回显测试输入", lambda query: {"query": query},
+                           args_model=SearchArguments))
     return AgentLoop(llm, registry)
 
 

@@ -2,10 +2,10 @@
 
 from ebike_ai.core.memory import ShortTermMemory
 from ebike_ai.core.state import AgentState
+from ebike_ai.core.tool_registry import ToolResult
 from ebike_ai.config import config
 from ebike_ai.utils.logger import get_logger
 from tenacity import retry, stop_after_attempt, wait_fixed
-import json
 import time
 
 logger = get_logger(__name__)
@@ -86,19 +86,13 @@ class AgentLoop:
             for tc in tool_calls:
                 tool_name = tc["name"]
                 tool_args = tc["args"]
-                logger.info(f"🔧 调用工具: {tool_name}, 参数: {tool_args}")
-                start = time.time()      # 记录开始时间
+                start = time.monotonic()
                 result = self.registry.execute(tool_name, tool_args)    # 执行工具
-                elapsed = time.time() - start   # 计算耗时
+                elapsed = time.monotonic() - start
                 if elapsed > 5:
                     logger.warning(f"工具 {tool_name} 执行耗时 {elapsed:.1f}s，超过 5s 阈值")
-                logger.info(f"📋 工具返回: {result[:100]}...")
-
-                # 判断工具是否成功：返回 JSON 里带 "error" 字段就算失败
-                try:
-                    success = "error" not in json.loads(result)
-                except Exception:
-                    success = True  # 非 JSON 字符串，视为工具正常返回
+                outcome = ToolResult.model_validate_json(result)
+                success = outcome.ok
 
                 # 记录工具调用轨迹，供评测框架统计（成功率、延迟等指标）
                 state["tool_trace"].append({
@@ -107,6 +101,7 @@ class AgentLoop:
                     "args": tool_args,
                     "elapsed": round(elapsed, 3),
                     "success": success,
+                    "error_code": outcome.error.code if outcome.error else None,
                 })
 
                 # 根据工具名，把结果写进 state 对应字段

@@ -1,4 +1,5 @@
 from ebike_ai.evaluation.metrics import detect_hallucination
+from ebike_ai.core.tool_registry import ToolResult
 
 
 class KeywordJudge:
@@ -55,13 +56,23 @@ class HallucinationJudge:
         self.judge_llm = judge_llm  # 评委 LLM 从外面传进来
 
     def judge(self, case, answer, state):
+        # 只有成功检索的数据可以作为依据，错误信息不是维修知识。
+        raw_docs = state.get("retrieved_docs", "")
+        if raw_docs:
+            try:
+                outcome = ToolResult.model_validate_json(raw_docs)
+                knowledge = outcome.data if outcome.ok else "检索失败，没有可用资料"
+            except ValueError:
+                knowledge = "检索结果格式无效，没有可用资料"
+        else:
+            knowledge = "没有检索资料"
         prompt = f"""你是严格的评测员。判断下面的电动车诊断回答有没有编造真实数据中不存在的信息（电压数值、维修步骤、配件型号）。
 
 【真实电压数据】
 {case['hardware_data']}
 
 【知识库内容】
-{state['retrieved_docs']}
+{knowledge}
 
 【Agent 的回答】
 {answer}
@@ -94,10 +105,11 @@ class ToolCallJudge:
         expect_tool = case["expect_tool"]  # 用例里指定"该调哪个工具"
 
         called_tools = [t["name"] for t in state["tool_trace"]]
+        successful_tools = [t["name"] for t in state["tool_trace"] if t.get("success")]
 
         if expect_tool:
-            passed = expect_tool in called_tools
-            detail = f"期望调用{expect_tool}，实际调用了{called_tools}"
+            passed = expect_tool in successful_tools
+            detail = f"期望成功调用{expect_tool}，实际成功调用了{successful_tools}"
 
         else:
             passed = called_tools == []

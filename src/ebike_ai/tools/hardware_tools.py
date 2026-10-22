@@ -3,6 +3,7 @@
 
 from ebike_ai.read_hardware import get_latest_battery_data
 from ebike_ai.core.tool_registry import Tool
+from ebike_ai.battery_data import validate_battery_data
 
 
 def create_hardware_tools():
@@ -14,6 +15,7 @@ def create_hardware_tools():
         name="get_battery_data",
         description="读取电动车电池的最新电压数据，包括每串电芯和总电压",
         func=get_latest_battery_data,
+        output_validator=validate_battery_data,
         parameters={
             "type": "object",
             "properties": {},

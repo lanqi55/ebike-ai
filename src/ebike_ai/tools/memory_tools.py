@@ -1,6 +1,6 @@
 # Agent 可调用的历史案例检索工具
 
-from ebike_ai.core.tool_registry import Tool
+from ebike_ai.core.tool_registry import Tool, SearchArguments
 
 def create_memory_tools(memory):
     """创建并返回历史案例检索工具列表
@@ -20,16 +20,7 @@ def create_memory_tools(memory):
         name="search_history_cases",
         description="搜索历史维修案例库，输入故障描述，返回之前类似的维修记录和解决方案",
         func= search_history_cases,
-        parameters={
-            "type": "object",
-            "properties": {
-                "query": {
-                    "type": "string",
-                    "description": "故障描述或关键词"
-                }
-            },
-            "required": ["query"]
-        }
+        args_model=SearchArguments,
     )
     tools.append(tool)
     return tools
