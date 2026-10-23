@@ -1,10 +1,11 @@
 # 电动车维修诊断 AI Agent
 
-基于通义千问的电动车维修诊断 Agent，包含 **RAG 知识库、ReAct 工具调用、长期记忆**，并配套一套**自研的 LLM 自动化评测平台**（多维度质量评测 + 性能指标）。
+基于通义千问的电动车维修诊断 Agent，包含 **RAG 知识库、ReAct 工具调用、请求隔离与失败处理**，并配套一套**自研的 LLM 自动化评测平台**（多维度质量评测 + 性能指标）。
 
 ## ✨ 功能特性
 
-- **ReAct 诊断 Agent**：手写 ReAct 循环 + 工具注册中心 + 短期/长期记忆（Chroma 持久化）
+- **ReAct 诊断 Agent**：手写循环与工具注册中心；API 每次独立诊断，命令行保留本次运行内的短期历史。长期案例检索默认关闭，不自动保存 AI 答案
+- **可靠性**：工具参数与输出校验、有限重试、网络超时、固定错误码与异常脱敏；工具失败和迭代耗尽明确报告未完成
 - **RAG 知识库**：Chroma 向量检索，语义匹配维修方案
 - **LLM 评测平台**：5 维度 Judge（关键词/格式/幻觉/工具调用/鲁棒性）+ 3 项性能指标（延迟/死循环/成功率）
 - **FastAPI 服务化**：`POST /diagnose`（诊断）+ `POST /evaluate`（评测）
@@ -24,6 +25,7 @@ ebike_ai/
 │       ├── api.py          #   FastAPI 服务及工单 router
 │       ├── work_order_api.py # 工单请求/响应及 HTTP 错误映射
 │       ├── main_agent.py   #   Agent 模式入口（命令行）
+│       ├── agent_factory.py # API 与命令行共用组装入口
 │       ├── build_rag.py    #   构建 RAG 知识库
 │       ├── config.py       #   配置集中管理
 │       ├── core/           #   Agent 引擎（react_loop/tool_registry/memory/state）
@@ -67,7 +69,7 @@ py -3.10 -m venv .venv
 .\.venv\Scripts\python.exe -m pytest -q -rs
 ```
 
-预期：`201 passed, 19 skipped`；两条真实模型测试需要 `--run-live`，17 条真实 MySQL 测试需要 `--run-db`，仅配置凭据不会开启调用。这里的“离线”指测试不依赖真实模型或 MySQL，依赖安装仍需要联网。跳过原因由 `-rs` 展示；跳过不等于通过。
+预期：`285 passed, 19 skipped`；两条真实模型测试需要 `--run-live`，17 条真实 MySQL 测试需要 `--run-db`，仅配置凭据不会开启调用。这里的“离线”指测试不依赖真实模型或 MySQL，依赖安装仍需要联网。跳过原因由 `-rs` 展示；跳过不等于通过。
 
 ### A3. 生成并读取模拟数据
 
@@ -203,7 +205,7 @@ Invoke-RestMethod -Uri "$apiUrl/health"
 .\.venv\Scripts\python.exe -m pytest -q -rs
 ```
 
-当前默认预期为 **201 条通过、19 条跳过**（第三周新增 86 条离线检查和 13 条真实数据库场景；跳过的是 2 条真实模型和 17 条真实 MySQL 测试）。配置凭据不等于授权调用；模型和数据库分别由 `--run-live`、`--run-db` 开启，只选 marker 或直接指定测试路径不会开启真实调用。
+当前默认预期为 **285 条通过、19 条跳过**（第四周新增 84 条离线检查；跳过的是 2 条真实模型和 17 条真实 MySQL 测试）。配置凭据不等于授权调用；模型和数据库分别由 `--run-live`、`--run-db` 开启，只选 marker 或直接指定测试路径不会开启真实调用。
 [`pip check`](https://pip.pypa.io/en/stable/cli/pip_check/) 只检查已安装包所声明的依赖是否兼容，不能发现项目忘记声明的包，也不证明业务功能正确。
 
 ### 分类与运行命令
@@ -212,8 +214,8 @@ Invoke-RestMethod -Uri "$apiUrl/health"
 
 | marker | 当前数量 | 验证内容 |
 |---|---:|---|
-| `unit` | 110 | 电压计算与校验、指标、工具边界、假依赖下的 Agent 控制逻辑、数据库配置、Repository、建单与查询 Service、测试数据清理及演示开关 |
-| `integration` | 108 | API、日志、Agent 工具调用链、pytest 开关与 CI、数据库 fixture 清理；含 17 条需显式开启的真实 MySQL 用例 |
+| `unit` | 156 | 电压、工具契约、组装与记忆、Embedding 失败处理、评测失败统计、数据库配置、Repository、工单 Service、清理及演示开关 |
+| `integration` | 146 | API、顺序与并发隔离、真实 SDK 与假 HTTP 传输、日志、pytest 开关与 CI、数据库 fixture 清理；含 17 条需显式开启的真实 MySQL 用例 |
 | `evaluation` | 2 | Agent 诊断质量；当前两条同时标记 `live` |
 | `live` | 2（与 evaluation 重叠） | 需要真实模型或 Embedding，默认跳过 |
 | `db` | 17（与 integration 重叠） | 真实 MySQL 的读写、唯一约束、回滚、建单提交及工单 HTTP 链路；默认跳过 |
@@ -285,7 +287,7 @@ if ($LASTEXITCODE -ne 0) { throw "依赖检查失败" }
 if ($LASTEXITCODE -ne 0) { throw "离线测试失败，请查看 reports/ci/" }
 ```
 
-当前预期为 **201 passed、19 deselected**。默认 pytest 的 `19 skipped` 表示收集后跳过；CI 的 `19 deselected` 表示被筛选排除，两者都不证明真实模型或 MySQL 测试通过。本地命令额外使用 `--clean-alluredir` 清理该目录的旧 Allure 结果，避免重复运行混入历史报告；CI 每次使用干净的 runner。
+当前预期为 **285 passed、19 deselected**。默认 pytest 的 `19 skipped` 表示收集后跳过；CI 的 `19 deselected` 表示被筛选排除，两者都不证明真实模型或 MySQL 测试通过。本地命令额外使用 `--clean-alluredir` 清理该目录的旧 Allure 结果，避免重复运行混入历史报告；CI 每次使用干净的 runner。
 
 pytest 直接把退出码交给 CI，没有 `continue-on-error` 或 `|| true`；测试失败会让检查变红。报告上传步骤使用 `always()`，在普通测试失败后仍上传 `offline-test-results`，保留 7 天，包含 JUnit XML 和 Allure 原始结果（不是 HTML 报告）。如果依赖安装失败，可能尚无报告，应查看失败步骤日志。退出码和失败处理依据 [pytest 文档](https://docs.pytest.org/en/stable/reference/exit-codes.html)与 [GitHub Actions 文档](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#jobsjob_idstepscontinue-on-error)。
 
@@ -305,6 +307,22 @@ pytest 直接把退出码交给 CI，没有 `continue-on-error` 或 `|| true`；
 | 启动真实 Uvicorn 进程并发送 HTTP 请求 | `/health`：200、`{"status":"ok"}`；`/docs`：200；空诊断输入：422 |
 
 验证时 8000 端口被已有进程占用，按 A4 将启动和检查端口同步改为 18000，未停止原进程。基础 API 验证没有 Key 或向量库，也没有调用真实模型。未验证浏览器交互组件加载、RAG 建库、真实诊断、ESP32 或其他操作系统／Python 版本；已安装版本快照只作本地证据，不作为依赖锁文件。
+
+## 第四周：诊断可靠性与离线演示
+
+[第四周实验与学习验收](docs/week4-agent-reliability.md)包含 Day 22–28 的任务、错误码、工具契约和复述题。运行演示不需要 Key、MySQL、硬件日志或向量库：
+
+```powershell
+.\.venv\Scripts\python.exe -m scripts.week4_agent_demo
+```
+
+演示包含旧串话行为复现、请求独立、屏障控制的并发交错，以及一个请求失败而另一个成功。它使用真实路由与 Agent、固定假模型和假工具，不能证明真实诊断质量。
+
+`/diagnose` 保留既有成功字段，不增加会话 ID。失败返回 `detail.code` 与中文 `detail.message`，不透传原始异常；工具证据字段仍为 JSON 字符串，内容改为 `ok / data / error`。模型与 Embedding 默认网络超时为 30 秒，最多尝试两次，不是整次接口的严格 30 秒总期限。
+
+长期案例库保留，但默认不检索、不自动写入；人工审核入库尚未实现。批量评测新增 `failure_count / failure_codes`，失败运行保留在统计中。
+
+2026-10-23 本地验收：`285 passed、19 skipped、2 warnings`，109.89 秒；`pip check` 与离线演示通过。两条既有弃用警告未通过升级依赖处理。真实模型、Embedding、MySQL 和容量压测未在本轮执行。
 
 ## 📊 评测框架
 
