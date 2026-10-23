@@ -1,7 +1,8 @@
 """工具参数在运行时校验，结果以统一 JSON 契约传给模型。"""
 
 import json
-from pydantic import BaseModel, ConfigDict, Field, JsonValue, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, JsonValue, ValidationError, model_validator
+from ebike_ai.core.failures import DiagnosisError
 
 
 class NoArguments(BaseModel):
@@ -27,6 +28,13 @@ class ToolResult(BaseModel):
     ok: bool
     data: JsonValue = None
     error: ToolError | None = None
+
+    @model_validator(mode="after")
+    def check_outcome(self):
+        """禁止成功携带错误，或失败携带可被误用的数据。"""
+        if (self.ok and self.error is not None) or (not self.ok and (self.error is None or self.data is not None)):
+            raise ValueError("工具结果状态不一致")
+        return self
 
     def to_json(self) -> str:
         """拒绝不可序列化或非有限数值，确保生成标准 JSON。"""
@@ -87,6 +95,10 @@ class ToolRegistry:
             return tool_failure("TOOL_ARGUMENTS_INVALID", "工具参数不符合要求")
         try:
             result = tool.func(**args)
+        except DiagnosisError as exc:
+            return tool_failure(exc.code, exc.message)
+        except TimeoutError:
+            return tool_failure("TOOL_TIMEOUT", "工具执行超时，请人工复检")
         except Exception:
             return tool_failure("TOOL_EXECUTION_FAILED", "工具执行失败，请补充资料或人工复检")
         # 读取硬件日志的旧返回格式在这里转换，不向模型暴露任意错误文本。
@@ -96,5 +108,5 @@ class ToolRegistry:
             if tool.output_validator is not None:
                 result = tool.output_validator(result)
             return ToolResult(ok=True, data=result).to_json()
-        except (ValidationError, TypeError, ValueError):
+        except Exception:
             return tool_failure("TOOL_OUTPUT_INVALID", "工具返回的数据格式无效")

@@ -4,6 +4,8 @@ from ebike_ai.embedding_utils import MyDashScopeEmbedding
 from langchain_chroma import Chroma
 from ebike_ai.core.tool_registry import Tool, SearchArguments
 from pydantic import TypeAdapter
+from pathlib import Path
+from ebike_ai.core.failures import DiagnosisError
 from ebike_ai.config import config
 
 # 向量库路径
@@ -15,6 +17,11 @@ def search_repair_knowledge(query: str) -> str:
     """
     根据用户的问题，检索维修知识库，返回相关文档内容。
     """
+    # 不让 Chroma 在检索时悄悄创建一个空库；构建知识库是独立操作。
+    if not (Path(DB_PATH) / "chroma.sqlite3").is_file():
+        raise DiagnosisError("KNOWLEDGE_NOT_READY")
+    if not config.embedding.api_key.strip():
+        raise DiagnosisError("EMBEDDING_NOT_CONFIGURED")
     # 初始化 embedding（和建库时一样）
     embeddings = MyDashScopeEmbedding(
         model=config.embedding.model,

@@ -25,7 +25,10 @@ def tool_latency(state):
 
 
 def max_iter_reached(state, max_iter=10):
-    """是否走到最大迭代次数（可能死循环/超时）"""
+    """优先读取明确失败原因，避免最后一轮成功被误判为耗尽。"""
+    if "status" in state:
+        return state.get("error_code") == "AGENT_ITERATION_LIMIT"
+    # 兼容没有状态字段的历史报告和通用假 Agent。
     return state.get("iteration_count", 0) >= max_iter
 
 

@@ -22,7 +22,8 @@ class LLMConfig:
     max_tokens: int = 500
     api_key: str = os.environ.get("DASHSCOPE_API_KEY", "")  # 环境变量名
     request_timeout: int = 30             # LLM 单次请求超时秒数
-    max_retries: int = 2           # LLM 调用失败最多重试次数
+    max_attempts: int = 2          # 包含首次调用，最多尝试两次
+    retry_delay: float = 1.0       # 两次尝试之间的等待秒数
 
 @dataclass
 class EmbeddingConfig:
@@ -32,6 +33,9 @@ class EmbeddingConfig:
     api_path: str = "/api/v1/services/embeddings/text-embedding/text-embedding"           # API 路径
     api_key: str = os.environ.get("DASHSCOPE_API_KEY", "")
     search_top_k: int = 2         # 填检索数量
+    request_timeout: int = 30     # 单次网络操作超时，不是整次诊断总期限
+    max_attempts: int = 2
+    retry_delay: float = 1.0
 
 @dataclass
 class AppConfig:

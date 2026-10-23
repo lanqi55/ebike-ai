@@ -3,6 +3,7 @@ from ebike_ai.core.tool_registry import Tool, ToolRegistry
 from ebike_ai.core.react_loop import AgentLoop
 from ebike_ai.tools.knowledge_tools import create_knowledge_tools
 from ebike_ai.evaluation.judges import KeywordJudge, FormatJudge, HallucinationJudge, ToolCallJudge, RobustnessJudge
+from ebike_ai.core.failures import DiagnosisError
 
 
 def evaluate(cases, llm, judge_llm, runs=3):
@@ -22,15 +23,23 @@ def evaluate(cases, llm, judge_llm, runs=3):
 
         # 跑 runs 次，收集各维度结果
         passes_by_dim = {judge.name: [] for judge in judges}
+        failure_codes = []
         for _ in range(runs):
             agent = AgentLoop(llm=llm, registry=registry, max_iter=10)
-            answer, state = agent.run(case["fault_text"])
+            try:
+                answer, state = agent.run(case["fault_text"])
+            except DiagnosisError as exc:
+                failure_codes.append(exc.code)
+                for passes in passes_by_dim.values():
+                    passes.append(False)
+                continue
             for judge in judges:
                 r = judge.judge(case, answer, state)
                 passes_by_dim[judge.name].append(r["passed"])
 
         # 汇总成通过率
-        row = {"fault_text": case["fault_text"], "category": case["category"]}
+        row = {"fault_text": case["fault_text"], "category": case["category"],
+               "failure_count": len(failure_codes), "failure_codes": failure_codes}
         for name, passes in passes_by_dim.items():
             valid = [p for p in passes if p is not None]
             row[name] = sum(valid) / len(valid) if valid else None

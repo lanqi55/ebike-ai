@@ -120,7 +120,8 @@ def llm(request):
         model=config.llm.model,
         dashscope_api_key=config.llm.api_key,
         temperature=config.llm.temperature,
-        model_kwargs={"max_tokens": config.llm.max_tokens},
+        max_retries=1,
+        model_kwargs={"max_tokens": config.llm.max_tokens, "request_timeout": config.llm.request_timeout},
     )
 
 

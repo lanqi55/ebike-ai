@@ -5,16 +5,26 @@ from langchain_community.chat_models import ChatTongyi
 from ebike_ai.config import config
 from ebike_ai.core.react_loop import AgentLoop
 from ebike_ai.core.tool_registry import ToolRegistry
+from ebike_ai.core.failures import DiagnosisError
+from ebike_ai.utils.logger import protect_sdk_logs
 from ebike_ai.tools.hardware_tools import create_hardware_tools
 from ebike_ai.tools.knowledge_tools import create_knowledge_tools
 
 
 def build_llm():
-    """创建模型客户端；后续调用由 Agent 管理。"""
+    """设置传输超时并关闭 SDK 包装层重试，统一由 Agent 限制尝试次数。"""
+    if not config.llm.api_key.strip():
+        raise DiagnosisError("MODEL_NOT_CONFIGURED")
+    protect_sdk_logs()
     return ChatTongyi(
         model=config.llm.model,
         dashscope_api_key=config.llm.api_key,
-        model_kwargs={"max_tokens": config.llm.max_tokens, "temperature": config.llm.temperature},
+        max_retries=1,
+        model_kwargs={
+            "max_tokens": config.llm.max_tokens,
+            "temperature": config.llm.temperature,
+            "request_timeout": config.llm.request_timeout,
+        },
     )
 
 

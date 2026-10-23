@@ -1,4 +1,7 @@
 
+from ebike_ai.core.failures import DiagnosisError
+
+
 class AgentTester:
     """通用 Agent 测试器：接收"建 agent 的函数" + Judge 列表，跑用例出报告"""
 
@@ -14,10 +17,21 @@ class AgentTester:
         for case in cases:
             passes_by_dim = {judge.name: [] for judge in self.judges}
             metric_values = {m.__name__ : [] for m in self.metrics}
+            failure_codes = []
 
             for _ in range(self.runs):
-                agent = self.agent_factory(case)      # ← 关键：每次 new 一个（fresh memory）
-                answer, state = agent.run(case["fault_text"])
+                try:
+                    agent = self.agent_factory(case)
+                    answer, state = agent.run(case["fault_text"])
+                except DiagnosisError as exc:
+                    failure_codes.append(exc.code)
+                    for passes in passes_by_dim.values():
+                        passes.append(False)
+                    failed_state = exc.state or {"tool_trace": [], "iteration_count": 0,
+                                                 "status": "failed", "error_code": exc.code}
+                    for metric in self.metrics:
+                        metric_values[metric.__name__].append(metric(failed_state))
+                    continue
                 for judge in self.judges:
                     r = judge.judge(case, answer, state)
                     passes_by_dim[judge.name].append(r["passed"])
@@ -25,7 +39,8 @@ class AgentTester:
                 for metric in self.metrics:
                     metric_values[metric.__name__].append(metric(state))
 
-            row = {"fault_text": case["fault_text"], "category": case["category"]}
+            row = {"fault_text": case["fault_text"], "category": case["category"],
+                   "failure_count": len(failure_codes), "failure_codes": failure_codes}
             for name, passes in passes_by_dim.items():
                 valid = [p for p in passes if p is not None]
                 row[name] = sum(valid) / len(valid) if valid else None

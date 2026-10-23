@@ -1,4 +1,5 @@
 from typing import TypedDict
+from typing import Literal
 
 # 把散装变量收进一个统一的结构体里，不用到处找"这个变量叫什么来着"
 class AgentState(TypedDict, total=False):
@@ -24,3 +25,5 @@ class AgentState(TypedDict, total=False):
 
     # 工具调用轨迹：每次调了什么工具、耗时、是否成功（供评测框架统计指标）
     tool_trace: list[dict]
+    status: Literal["running", "completed", "insufficient_evidence", "failed"]
+    error_code: str | None

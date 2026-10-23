@@ -86,7 +86,7 @@ def test_api_concurrent_requests_keep_inputs_answers_and_traces_separate(monkeyp
     with ThreadPoolExecutor(max_workers=2) as pool:
         futures = [pool.submit(request, q) for q in ("车辆甲", "车辆乙")]
         first, second = [f.result(timeout=20) for f in futures]
-    assert first.status_code == (500 if fail_query else 200)
+    assert first.status_code == (503 if fail_query else 200)
     assert second.status_code == 200
     assert len(observed) == 2
     for model in observed:

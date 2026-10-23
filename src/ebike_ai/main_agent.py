@@ -1,6 +1,9 @@
 """命令行诊断：本次运行保留短期历史，不自动写入维修案例。"""
 
 from ebike_ai.agent_factory import build_agent
+from ebike_ai.core.failures import DiagnosisError
+from ebike_ai.core.tool_registry import SearchArguments
+from pydantic import ValidationError
 
 
 def run_cli(*, agent_factory=None, input_func=input, output_func=print):
@@ -8,6 +11,9 @@ def run_cli(*, agent_factory=None, input_func=input, output_func=print):
     factory = build_agent if agent_factory is None else agent_factory
     try:
         agent = factory()
+    except DiagnosisError as exc:
+        output_func(f"{exc.code}：{exc.message}")
+        return
     except Exception:
         output_func("诊断初始化失败，请检查服务配置。")
         return
@@ -19,11 +25,16 @@ def run_cli(*, agent_factory=None, input_func=input, output_func=print):
             return
         if fault_input.strip().lower() == "quit":
             return
-        if not fault_input.strip():
-            output_func("请输入故障描述。")
+        try:
+            fault_input = SearchArguments(query=fault_input).query
+        except ValidationError:
+            output_func("请输入 1 至 500 字的非空故障描述。")
             continue
         try:
             answer, state = agent.run(fault_input)
+        except DiagnosisError as exc:
+            output_func(f"诊断失败，{exc.code}：{exc.message}")
+            continue
         except Exception:
             output_func("诊断失败，请稍后重试或联系维修师复检。")
             continue

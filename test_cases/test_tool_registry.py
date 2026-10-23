@@ -2,11 +2,12 @@ import pytest
 
 from ebike_ai.core.tool_registry import Tool, ToolRegistry
 from ebike_ai.core.react_loop import AgentLoop
+from ebike_ai.core.failures import DiagnosisError
 
 
 @pytest.mark.unit
 def test_agent_llm_empty_content():
-    """测试：LLM 返回空内容且不调工具时，Agent 不应崩溃"""
+    """空内容且无工具调用应明确失败，不作为成功历史保存。"""
 
     class FakeLLM:
         def bind_tools(self, schemas):
@@ -22,15 +23,15 @@ def test_agent_llm_empty_content():
     registry = ToolRegistry()
     agent = AgentLoop(llm=FakeLLM(), registry=registry, max_iter=10)
 
-    answer, state = agent.run("测试")
-
-    # 断言：Agent 正常结束（返回空字符串或提示），而不是抛异常
-    assert isinstance(answer, str)
+    with pytest.raises(DiagnosisError) as caught:
+        agent.run("测试")
+    assert caught.value.code == "MODEL_RESPONSE_INVALID"
+    assert not agent.memory.buffer
 
 
 @pytest.mark.unit
 def test_agent_max_iter_protection():
-    """测试：max_iter=0 时，Agent 应立即返回超时提示，而不是无限循环"""
+    """迭代次数耗尽明确失败，不与网络超时混淆。"""
 
     # 造一个假 LLM
     class FakeLLM:
@@ -48,10 +49,10 @@ def test_agent_max_iter_protection():
     registry = ToolRegistry()
     agent = AgentLoop(llm=FakeLLM(), registry=registry, max_iter=0)
 
-    answer, state = agent.run("测试")
-
-    # 断言：max_iter=0，循环一次都不该跑，直接返回超时提示
-    assert "超时" in answer
+    with pytest.raises(DiagnosisError) as caught:
+        agent.run("测试")
+    assert caught.value.code == "AGENT_ITERATION_LIMIT"
+    assert caught.value.state["iteration_count"] == 0
 
 
 @pytest.mark.unit

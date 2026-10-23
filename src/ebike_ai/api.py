@@ -1,18 +1,26 @@
 # FastAPI 服务化：把诊断 Agent 包装成 HTTP 接口
 # 作用：（前端 / 其他服务）用 HTTP 就能调用诊断能力，不用 import Python 代码
-from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel, Field
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.exceptions import RequestValidationError
+from fastapi.exception_handlers import request_validation_exception_handler
+from fastapi.responses import JSONResponse
+from pydantic import BaseModel, Field, ConfigDict
 
 from langchain_community.chat_models import ChatTongyi
 from ebike_ai.agent_factory import build_agent
 from ebike_ai.config import config
 from ebike_ai.work_order_api import router as work_order_router
+from ebike_ai.core.failures import DiagnosisError
+from ebike_ai.utils.logger import get_logger
+
+logger = get_logger(__name__)
 
 
 # ========== 1. 定义"入参 / 出参"结构（Pydantic 自动校验） ==========
 
 class DiagnoseRequest(BaseModel):
     """POST /diagnose 的请求体"""
+    model_config = ConfigDict(strict=True, str_strip_whitespace=True)
     fault_text: str = Field(..., min_length=1, max_length=500, description="电动车故障描述")
 
 
@@ -43,6 +51,15 @@ app = FastAPI(title="电动车维修诊断 API", version="0.1.0")
 app.include_router(work_order_router)
 
 
+@app.exception_handler(RequestValidationError)
+async def validation_error_handler(request: Request, exc: RequestValidationError):
+    """诊断输入错误不回显用户内容；其他接口保留原有校验响应。"""
+    if request.url.path == "/diagnose":
+        error = DiagnosisError("INPUT_INVALID")
+        return JSONResponse(status_code=error.status_code, content={"detail": error.detail()})
+    return await request_validation_exception_handler(request, exc)
+
+
 # ========== 3. 诊断接口 ==========
 
 # 坑：Agent 是同步的（invoke 会阻塞等 LLM 返回），所以这里用 def 而不是 async def。
@@ -53,17 +70,20 @@ def diagnose(req: DiagnoseRequest):
     try:
         agent = build_agent()
         answer, state = agent.run(req.fault_text)
-    except Exception as e:
-        # 诊断出错 → 返回 500，而不是让接口直接崩掉
-        raise HTTPException(status_code=500, detail=f"诊断失败: {e}")
-
-    return DiagnoseResponse(
-        answer=answer,
-        iteration_count=state["iteration_count"],
-        hardware_data=state["hardware_data"],
-        retrieved_docs=state["retrieved_docs"],
-        tool_trace=state["tool_trace"],
-    )
+        return DiagnoseResponse(
+            answer=answer,
+            iteration_count=state["iteration_count"],
+            hardware_data=state["hardware_data"],
+            retrieved_docs=state["retrieved_docs"],
+            tool_trace=state["tool_trace"],
+        )
+    except DiagnosisError as exc:
+        logger.warning("诊断未完成，错误码=%s", exc.code)
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail()) from None
+    except Exception:
+        error = DiagnosisError("INTERNAL_ERROR")
+        logger.error("诊断未完成，错误码=%s", error.code)
+        raise HTTPException(status_code=error.status_code, detail=error.detail()) from None
 
 @app.post("/evaluate")
 def evaluate_endpoint(req: EvaluateRequest):
