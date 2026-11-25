@@ -1,0 +1,25 @@
+{
+  "case_id": "CASE-003",
+  "collected_on": "2026-11-25",
+  "repair_date": null,
+  "provenance": "用户于 2026-11-25 转述，并明确确认四部分内容均经父亲（维修师）确认；未收到原始测量记录。",
+  "confirmation": "confirmed",
+  "vehicle_context": null,
+  "symptoms": "松开刹车后车子仍跑不快，感觉一直带着刹车，骑起来很沉。",
+  "checks": [
+    {"action": "抬起车轮，手动转动感受阻力", "result": null},
+    {"action": "查看前后刹车闸", "result": null},
+    {"action": "检查刹车回弹弹簧", "result": null}
+  ],
+  "measurements": null,
+  "initial_assessment": null,
+  "final_diagnosis": "维修师确认后刹车回位弹簧卡住不回弹，刹车片持续摩擦车轮（按用户原叙述记录，具体摩擦部位未进一步确认）。",
+  "repair_actions": ["拆开刹车部位并清理泥沙", "校正弹簧位置", "调整刹车松紧"],
+  "recheck": "支起大撑，手动转动车轮顺滑无阻滞；上路骑行，松开刹车后滑行顺畅，骑行不再费劲。仅记录这次维修师实施的复检，不作为通用操作指引。",
+  "missing_information": [
+    "测量间隙未记录；其他测量数值、仪器及条件未提供。",
+    "各项检查的逐项结果及具体确认依据未提供；不推断前刹车正常。",
+    "维修日期、车型、刹车结构及部件规格未提供。",
+    "弹簧卡滞根因、调整量、复检环境、次数、持续时长及长期使用情况未提供。"
+  ]
+}

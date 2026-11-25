@@ -1,0 +1,24 @@
+{
+  "case_id": "CASE-002",
+  "collected_on": "2026-11-25",
+  "repair_date": null,
+  "provenance": "用户于 2026-11-25 转述，并明确确认检查、判断、维修和复检内容均经父亲（维修师）确认；未收到原始测量记录。",
+  "confirmation": "confirmed",
+  "vehicle_context": null,
+  "symptoms": "电动车静止时拧转把车子不动，有时要用力晃一下车把才能走。",
+  "checks": [
+    {"action": "拆开车把外壳，查看转把电线", "result": null},
+    {"action": "晃动线束观察通断情况", "result": null}
+  ],
+  "measurements": null,
+  "initial_assessment": null,
+  "final_diagnosis": "维修师确认转把内部线路断线，晃动才会偶尔接通。",
+  "repair_actions": ["更换整套新转把", "接好线束并固定外壳"],
+  "recheck": "原地多次拧动转把，每次均能正常输出动力；来回晃动车把，不再出现断走现象。",
+  "missing_information": [
+    "电压测量未记录；仪器、测点、测量条件未提供。",
+    "各项检查的逐项观察结果、断线位置与具体确认方法未提供；不把最终判断填作逐项检查结果。",
+    "维修日期、车型、转把规格、断线根因未提供。",
+    "复检次数、持续时长及长期使用情况未提供；不推断整车安全。"
+  ]
+}
