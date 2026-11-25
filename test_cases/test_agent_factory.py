@@ -9,6 +9,7 @@ from langchain_core.messages import AIMessage
 
 from ebike_ai import agent_factory, api, main_agent
 from ebike_ai.core.memory import LongTermMemory
+from ebike_ai.core.tool_registry import ToolRegistry
 
 pytestmark = pytest.mark.unit
 
@@ -49,7 +50,8 @@ def test_cli_keeps_only_successful_short_term_history_without_long_term_writes(m
     monkeypatch.setattr(LongTermMemory, "__init__", forbidden)
     monkeypatch.setattr(LongTermMemory, "add_case", forbidden)
     llm = RecordingLLM()
-    agent = agent_factory.build_agent(llm=llm)
+    # 使用无知识工具的控制模型验证 CLI 记忆，不把无证据回答当作真实诊断。
+    agent = agent_factory.build_agent(llm=llm, registry=ToolRegistry())
     queries = iter(["车辆甲", "失败", "继续检查", "quit"])
     output = []
     main_agent.run_cli(agent_factory=lambda: agent, input_func=lambda _: next(queries), output_func=output.append)

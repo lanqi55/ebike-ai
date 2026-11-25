@@ -1,5 +1,8 @@
 from ebike_ai.evaluation.metrics import detect_hallucination
 from ebike_ai.core.tool_registry import ToolResult
+from ebike_ai.evidence import citation_problem
+from ebike_ai.knowledge import validate_chunks
+import json
 
 
 class KeywordJudge:
@@ -61,18 +64,34 @@ class HallucinationJudge:
         if raw_docs:
             try:
                 outcome = ToolResult.model_validate_json(raw_docs)
-                knowledge = outcome.data if outcome.ok else "检索失败，没有可用资料"
+                if outcome.ok and isinstance(outcome.data, list):
+                    chunks = validate_chunks(outcome.data)
+                    knowledge = json.dumps(chunks, ensure_ascii=False)
+                else:
+                    knowledge = outcome.data if outcome.ok else "检索失败，没有可用资料"
             except ValueError:
                 knowledge = "检索结果格式无效，没有可用资料"
         else:
             knowledge = "没有检索资料"
+        measurement = "本次没有成功取得测量工具证据"
+        raw_measurement = state.get("hardware_data", "")
+        if raw_measurement:
+            try:
+                outcome = ToolResult.model_validate_json(raw_measurement)
+                if outcome.ok:
+                    measurement = json.dumps(outcome.data, ensure_ascii=False)
+            except ValueError:
+                measurement = "测量工具证据格式无效"
         prompt = f"""你是严格的评测员。判断下面的电动车诊断回答有没有编造真实数据中不存在的信息（电压数值、维修步骤、配件型号）。
 
-【真实电压数据】
-{case['hardware_data']}
+【本次测量工具结果及规则；是否属于实车须核对关联】
+{measurement}
 
 【知识库内容】
 {knowledge}
+
+知识中的历史案例不是当前车辆事实。来源缺失或尚未确认的资料不能视作已确认依据。
+规则结果不足、不适用或冲突时，不应声称电池正常或指定更换部件。
 
 【Agent 的回答】
 {answer}
@@ -96,6 +115,22 @@ class HallucinationJudge:
                 "passed": passed,
                 "detail": detail
                 }
+
+
+class EvidenceJudge:
+    """独立统计来源可追溯性；保守追问不计为成功引用，也不交给模型裁决。"""
+    name = "证据引用有效率"
+
+    def judge(self, case, answer, state):
+        if state.get("status") == "insufficient_evidence":
+            return {"name": self.name, "score": None, "passed": None, "detail": "证据不足，未形成诊断结论"}
+        try:
+            outcome = ToolResult.model_validate_json(state.get("retrieved_docs", ""))
+            problem = citation_problem(answer, outcome.data) if outcome.ok else "检索失败"
+        except (ValueError, TypeError):
+            problem = "没有有效的来源片段列表"
+        return {"name": self.name, "score": 0.0 if problem else 1.0,
+                "passed": problem is None, "detail": problem or "引用属于本次已确认的来源片段；不证明语义正确"}
 
 
 class ToolCallJudge:

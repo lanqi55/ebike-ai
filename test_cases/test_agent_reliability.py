@@ -53,7 +53,8 @@ def sleeps(monkeypatch):
     requests.HTTPError(response={"status_code": 429}), requests.HTTPError(response={"status_code": 503})])
 def test_transient_failure_retries_once_then_succeeds(error, sleeps):
     llm = ScriptedLLM([error, AIMessage(content="正常回答")])
-    answer, state = build_agent(llm=llm).run("故障")
+    # 本组只测试传输重试；来源约束由独立证据测试验证。
+    answer, state = build_agent(llm=llm, registry=ToolRegistry()).run("故障")
     assert answer == "正常回答" and state["status"] == "completed"
     assert len(llm.inputs) == 2 and sleeps == [1]
 
@@ -202,7 +203,7 @@ def test_iteration_exhaustion_preserves_trace_and_is_not_network_timeout():
 
 
 def test_last_iteration_can_complete_successfully():
-    agent = build_agent(llm=ScriptedLLM([AIMessage(content="完成")]), max_iter=1)
+    agent = build_agent(llm=ScriptedLLM([AIMessage(content="完成")]), registry=ToolRegistry(), max_iter=1)
     _, state = agent.run("故障")
     assert not max_iter_reached(state, max_iter=1)
 
@@ -232,7 +233,7 @@ def test_failed_tools_stop_before_model_can_invent_answer(name, result, code):
 
 def test_empty_knowledge_has_deterministic_human_review_fallback():
     registry = ToolRegistry()
-    registry.register(Tool("search_repair_knowledge", "检索", lambda: ""))
+    registry.register(Tool("search_repair_knowledge", "检索", lambda: []))
     llm = ScriptedLLM([AIMessage(content="", tool_calls=[
         {"id": "1", "name": "search_repair_knowledge", "args": {}},
     ])])

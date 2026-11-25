@@ -4,11 +4,13 @@ from ebike_ai.core.react_loop import AgentLoop
 from ebike_ai.tools.knowledge_tools import create_knowledge_tools
 from ebike_ai.evaluation.judges import KeywordJudge, FormatJudge, HallucinationJudge, ToolCallJudge, RobustnessJudge
 from ebike_ai.core.failures import DiagnosisError
+from ebike_ai.evaluation.judges import EvidenceJudge
+from ebike_ai.voltage_rules import battery_data_with_rules
 
 
 def evaluate(cases, llm, judge_llm, runs=3):
     """批量评测：每个用例跑 runs 次，返回各维度通过率列表"""
-    judges = [KeywordJudge(), FormatJudge(), HallucinationJudge(judge_llm), ToolCallJudge(), RobustnessJudge()]
+    judges = [KeywordJudge(), FormatJudge(), HallucinationJudge(judge_llm), ToolCallJudge(), RobustnessJudge(), EvidenceJudge()]
 
     results = []
     for case in cases:
@@ -17,13 +19,15 @@ def evaluate(cases, llm, judge_llm, runs=3):
         def fake_get_battery_data():
             return case["hardware_data"]
         registry.register(Tool(name="get_battery_data", description="读取电池电压",
-                               func=fake_get_battery_data, parameters={"type":"object","properties":{},"required":[]}))
+                               func=fake_get_battery_data, output_validator=battery_data_with_rules,
+                               parameters={"type":"object","properties":{},"required":[]}))
         for tool in create_knowledge_tools():
             registry.register(tool)
 
         # 跑 runs 次，收集各维度结果
         passes_by_dim = {judge.name: [] for judge in judges}
         failure_codes = []
+        insufficient_count = 0
         for _ in range(runs):
             agent = AgentLoop(llm=llm, registry=registry, max_iter=10)
             try:
@@ -36,10 +40,13 @@ def evaluate(cases, llm, judge_llm, runs=3):
             for judge in judges:
                 r = judge.judge(case, answer, state)
                 passes_by_dim[judge.name].append(r["passed"])
+            if state.get("status") == "insufficient_evidence":
+                insufficient_count += 1
 
         # 汇总成通过率
         row = {"fault_text": case["fault_text"], "category": case["category"],
-               "failure_count": len(failure_codes), "failure_codes": failure_codes}
+               "failure_count": len(failure_codes), "failure_codes": failure_codes,
+               "insufficient_evidence_count": insufficient_count}
         for name, passes in passes_by_dim.items():
             valid = [p for p in passes if p is not None]
             row[name] = sum(valid) / len(valid) if valid else None

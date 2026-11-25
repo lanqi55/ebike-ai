@@ -104,7 +104,7 @@ def evaluate_endpoint(req: EvaluateRequest):
     # ④ 汇总各维度通过率
     import pandas as pd
     df = pd.DataFrame(results)
-    cols = ["关键词命中率", "格式合规率", "幻觉检测", "工具调用正确率", "输入鲁棒性"]
+    cols = ["关键词命中率", "格式合规率", "幻觉检测", "工具调用正确率", "输入鲁棒性", "证据引用有效率"]
     summary = {}
     for c in cols:
         v = df[c].mean()

@@ -6,7 +6,6 @@ from pathlib import Path
 from typing import Literal
 
 from langchain_core.documents import Document
-from langchain_text_splitters import RecursiveCharacterTextSplitter
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, model_validator
 
 
@@ -87,6 +86,7 @@ def load_cases(directory: Path) -> list[RepairCase]:
 def prepare_documents(doc_path: Path, case_path: Path, *, excluded_case_ids=()) -> list[Document]:
     """准备独立参考资料和已确认案例；留一回归不加载可能含答案的任意参考文档。"""
     from langchain_community.document_loaders import Docx2txtLoader, PyPDFLoader
+    from langchain_text_splitters import RecursiveCharacterTextSplitter
 
     splitter = RecursiveCharacterTextSplitter(chunk_size=300, chunk_overlap=50)
     output = []

@@ -33,6 +33,7 @@ def policy_project(pytester, monkeypatch):
         + '''
 from pathlib import Path
 from types import SimpleNamespace
+from ebike_ai.core.tool_registry import Tool, SearchArguments
 import socket
 
 def block_network(*args, **kwargs):
@@ -55,7 +56,19 @@ class FakeChatTongyi:
 
     def invoke(self, messages):
         record_call("invoked")
-        return SimpleNamespace(content="电芯 cell3 低于 电池 老化", tool_calls=None)
+        if messages[-1]["role"] != "tool":
+            return SimpleNamespace(content="", tool_calls=[{
+                "id": "policy-search", "name": "search_repair_knowledge", "args": {"query": "离线策略测试"},
+            }])
+        return SimpleNamespace(content="合成标签：电芯 cell3 低于 电池 老化 [来源:POLICY-000000000000-0000]", tool_calls=None)
+
+def create_knowledge_tools():
+    # 仅供开关策略验证，不代表真实维修证据或模型准确率。
+    return [Tool("search_repair_knowledge", "离线策略测试", lambda query: [{
+        "doc_id": "POLICY", "version": "0" * 64, "chunk_id": "POLICY-000000000000-0000",
+        "source": "synthetic-policy-fixture", "content": "合成标签：电芯 cell3 低于 电池 老化",
+        "confirmation": "confirmed", "source_kind": "reference", "provenance_status": "complete",
+    }], args_model=SearchArguments)]
 
 ChatTongyi = FakeChatTongyi
 '''
@@ -138,7 +151,7 @@ def test_flag_and_key_allow_fake_model_execution(policy_project, selection):
 
     result.assert_outcomes(passed=2 if selection else 3, deselected=1 if selection else 0)
     assert (policy_project.path / "model-calls.txt").read_text(encoding="utf-8").splitlines() == [
-        "created", "invoked", "invoked"
+        "created", "invoked", "invoked", "invoked", "invoked"
     ]
 
 

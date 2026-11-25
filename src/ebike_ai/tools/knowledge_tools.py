@@ -31,7 +31,7 @@ def search_repair_knowledge(query: str) -> list[dict]:
     )
     # 加载向量库
     manifest_path = Path(DB_PATH) / "evidence_manifest.json"
-    options = {}
+    options = {"create_collection_if_not_exists": False}
     if manifest_path.exists():
         try:
             manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
