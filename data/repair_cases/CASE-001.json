@@ -1,0 +1,26 @@
+{
+  "case_id": "CASE-001",
+  "collected_on": "2026-10-14",
+  "repair_date": null,
+  "provenance": "用户转述；用户于 2026-10-14 表示提供内容均由父亲（维修师）确认；未收到原始测量记录。",
+  "confirmation": "confirmed",
+  "vehicle_context": null,
+  "symptoms": "车灯、喇叭全都失效，但是车子还可以正常骑行。",
+  "checks": [
+    {"action": "查看整车保险", "result": null},
+    {"action": "检查灯光喇叭线束插头", "result": null},
+    {"action": "检查转换器", "result": null}
+  ],
+  "measurements": null,
+  "initial_assessment": null,
+  "final_diagnosis": "维修师确认负责灯和喇叭供电的转换器烧坏；损坏根因未提供。",
+  "repair_actions": ["更换新的转换器", "整理包扎线路接头"],
+  "recheck": "大灯、远近光、转向灯均正常点亮，喇叭响声正常；反复开关后功能稳定。次数、持续时长未提供。",
+  "missing_information": [
+    "电压数值未记录，测点、仪器及测量条件未提供。",
+    "三项检查的逐项结果和具体诊断依据待补充，不推断均正常。",
+    "维修日期、车型、电池及转换器规格未提供。",
+    "中间假设、排除过程、损坏根因未提供。",
+    "复检次数、持续时长、交车及长期使用情况未提供。"
+  ]
+}
