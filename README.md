@@ -69,7 +69,7 @@ py -3.10 -m venv .venv
 .\.venv\Scripts\python.exe -m pytest -q -rs
 ```
 
-预期：`285 passed, 19 skipped`；两条真实模型测试需要 `--run-live`，17 条真实 MySQL 测试需要 `--run-db`，仅配置凭据不会开启调用。这里的“离线”指测试不依赖真实模型或 MySQL，依赖安装仍需要联网。跳过原因由 `-rs` 展示；跳过不等于通过。
+预期：`338 passed, 19 skipped`；两条真实模型测试需要 `--run-live`，17 条真实 MySQL 测试需要 `--run-db`，仅配置凭据不会开启调用。这里的“离线”指测试不依赖真实模型或 MySQL，依赖安装仍需要联网。跳过原因由 `-rs` 展示；跳过不等于通过。
 
 ### A3. 生成并读取模拟数据
 
@@ -205,7 +205,7 @@ Invoke-RestMethod -Uri "$apiUrl/health"
 .\.venv\Scripts\python.exe -m pytest -q -rs
 ```
 
-当前默认预期为 **285 条通过、19 条跳过**（第四周新增 84 条离线检查；跳过的是 2 条真实模型和 17 条真实 MySQL 测试）。配置凭据不等于授权调用；模型和数据库分别由 `--run-live`、`--run-db` 开启，只选 marker 或直接指定测试路径不会开启真实调用。
+当前默认预期为 **338 条通过、19 条跳过**（第五周新增 53 条离线检查；跳过的是 2 条真实模型和 17 条真实 MySQL 测试）。配置凭据不等于授权调用；模型和数据库分别由 `--run-live`、`--run-db` 开启，只选 marker 或直接指定测试路径不会开启真实调用。
 [`pip check`](https://pip.pypa.io/en/stable/cli/pip_check/) 只检查已安装包所声明的依赖是否兼容，不能发现项目忘记声明的包，也不证明业务功能正确。
 
 ### 分类与运行命令
@@ -214,8 +214,8 @@ Invoke-RestMethod -Uri "$apiUrl/health"
 
 | marker | 当前数量 | 验证内容 |
 |---|---:|---|
-| `unit` | 156 | 电压、工具契约、组装与记忆、Embedding 失败处理、评测失败统计、数据库配置、Repository、工单 Service、清理及演示开关 |
-| `integration` | 146 | API、顺序与并发隔离、真实 SDK 与假 HTTP 传输、日志、pytest 开关与 CI、数据库 fixture 清理；含 17 条需显式开启的真实 MySQL 用例 |
+| `unit` | 202 | 电压与规则、知识来源、引用契约、组装与记忆、Embedding 失败处理、评测统计、数据库配置、Repository、工单 Service、清理及演示开关 |
+| `integration` | 153 | API、顺序与并发隔离、真实 SDK 与假 HTTP、本地 Chroma 配假 Embedding、案例回归、日志、pytest 开关与 CI、数据库 fixture 清理；含 17 条需显式开启的真实 MySQL 用例 |
 | `evaluation` | 2 | Agent 诊断质量；当前两条同时标记 `live` |
 | `live` | 2（与 evaluation 重叠） | 需要真实模型或 Embedding，默认跳过 |
 | `db` | 17（与 integration 重叠） | 真实 MySQL 的读写、唯一约束、回滚、建单提交及工单 HTTP 链路；默认跳过 |
@@ -287,7 +287,7 @@ if ($LASTEXITCODE -ne 0) { throw "依赖检查失败" }
 if ($LASTEXITCODE -ne 0) { throw "离线测试失败，请查看 reports/ci/" }
 ```
 
-当前预期为 **285 passed、19 deselected**。默认 pytest 的 `19 skipped` 表示收集后跳过；CI 的 `19 deselected` 表示被筛选排除，两者都不证明真实模型或 MySQL 测试通过。本地命令额外使用 `--clean-alluredir` 清理该目录的旧 Allure 结果，避免重复运行混入历史报告；CI 每次使用干净的 runner。
+当前预期为 **338 passed、19 deselected**。默认 pytest 的 `19 skipped` 表示收集后跳过；CI 的 `19 deselected` 表示被筛选排除，两者都不证明真实模型或 MySQL 测试通过。本地命令额外使用 `--clean-alluredir` 清理该目录的旧 Allure 结果，避免重复运行混入历史报告；CI 每次使用干净的 runner。
 
 pytest 直接把退出码交给 CI，没有 `continue-on-error` 或 `|| true`；测试失败会让检查变红。报告上传步骤使用 `always()`，在普通测试失败后仍上传 `offline-test-results`，保留 7 天，包含 JUnit XML 和 Allure 原始结果（不是 HTML 报告）。如果依赖安装失败，可能尚无报告，应查看失败步骤日志。退出码和失败处理依据 [pytest 文档](https://docs.pytest.org/en/stable/reference/exit-codes.html)与 [GitHub Actions 文档](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#jobsjob_idstepscontinue-on-error)。
 
@@ -324,11 +324,28 @@ pytest 直接把退出码交给 CI，没有 `continue-on-error` 或 `|| true`；
 
 2026-10-23 本地验收：`285 passed、19 skipped、2 warnings`，109.89 秒；`pip check` 与离线演示通过。两条既有弃用警告未通过升级依赖处理。真实模型、Embedding、MySQL 和容量压测未在本轮执行。
 
+## 第五周：来源追溯与可信诊断
+
+[第五周学习与实验](docs/week5-trustworthy-diagnosis.md)按 Day 29–35 组织，包含[匿名案例模板](docs/repair-case-template.md)、[确定性规则](docs/day31-voltage-rules.md)、[RAG 来源](docs/day32-rag-provenance.md)及[错误场景清单](docs/week5-failure-cases.md)。已记录三条用户明确表示经父亲确认的匿名维修经历；缺失测量保持未知，没有补造电压、间隙或维修日期。
+
+```powershell
+# 假模型、固定假检索，不需要 Key、MySQL、硬件日志或现有向量库
+.\venv\Scripts\python.exe -m scripts.week5_evidence_demo
+```
+
+报告写入 `reports/week5/evidence-demo.json`，包括每条输入的来源、预期与实际状态、失败列表。三条案例各运行四个场景；留一案例语料不包含被测案例，模型输入不包含最终维修结果。通过只证明离线契约，不代表真实检索或诊断准确率。
+
+`/diagnose` 保留原有顶层字段。`hardware_data` 的工具 JSON 新增 `data.rule_result`；`retrieved_docs` 的工具 JSON 改为 `data` 片段列表，包含文档编号、内容版本、片段编号、正文和确认情况，调用方需适配内层结构。没有来源、来源未确认、引用未知片段或规则缺少适用条件时，返回补充证据或人工复检提示。
+
+新建知识库使用独立的版本集合，核对后才切换清单，旧库保留；本周离线测试只使用假 Embedding 和临时库，未迁移实际知识库。旧 Word/PDF 默认未人工确认；生产规则尚无真实业务阈值。有效引用也可能对应错误的类比，仍需维修师判断。人工审核入库、真实模型质量与完整维修闭环尚未完成。
+
+2026-11-25 本地最终回归：`338 passed、19 skipped、2 warnings`，207.67 秒；`pip check` 通过，离线演示 12/12 通过。共收集 357 条，每条恰有一个主要分类。真实模型、Embedding 与 MySQL 均未开启；这些结果不是远端 CI 状态或用户学习验收。
+
 ## 📊 评测框架
 
 一套**多维度 LLM 评测平台**，从"回答质量"和"运行性能"两个维度量化 Agent：
 
-**质量维度（5 个 Judge）**：
+**质量维度（6 个 Judge）**：
 
 | Judge | 评什么 |
 |---|---|
@@ -337,14 +354,15 @@ pytest 直接把退出码交给 CI，没有 `continue-on-error` 或 `|| true`；
 | 幻觉检测 | 是否编造知识库外的事实（**LLM-judge**） |
 | 工具调用正确率 | 该调的工具调了没 |
 | 输入鲁棒性 | 是否被 prompt 注入攻破 |
+| 证据引用有效率 | 引用是否属于本次返回且已确认的来源片段；不证明语义正确 |
 
 **性能指标（3 项）**：工具调用延迟、死循环检测、工具调用成功率。
 
-批量评测：`python -m ebike_ai.evaluation.run_evaluation`，输出 Excel 报告 + 通过率柱状图。评测结果通过 `POST /evaluate` 接口对外提供。
+批量评测：`python -m ebike_ai.evaluation.run_evaluation`，输出 Excel 报告；评测结果也通过 `POST /evaluate` 接口提供。第五周新增 `insufficient_evidence_count`，与异常 `failure_count` 分开；证据不足不计为引用检查通过。上述入口可能调用真实模型并产生费用，离线演示不使用它们。
 
 > 特点：采用**多次跑统计通过率**，解决 LLM 非确定性问题。
 
-## 🔍 评测发现
+## 🔍 历史评测发现（不是第五周验证结果）
 
 评测框架不只是"跑测试"，它**发现了两个真实缺陷**：
 
