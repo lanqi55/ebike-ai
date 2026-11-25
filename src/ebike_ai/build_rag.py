@@ -1,48 +1,61 @@
+"""构建带版本的知识快照；验证成功后切换入口，保留既有向量库。"""
 
-from langchain_community.document_loaders import DirectoryLoader
-from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain_community.document_loaders import Docx2txtLoader, PyPDFLoader
-from langchain_community.vectorstores import Chroma
+import hashlib
+import json
+import os
+import tempfile
+from pathlib import Path
+
+from langchain_chroma import Chroma
 from ebike_ai.embedding_utils import MyDashScopeEmbedding
-from ebike_ai.config import config
+from ebike_ai.config import config, PROJECT_ROOT
+from ebike_ai.knowledge import prepare_documents
 from ebike_ai.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
-# 1、定义文档路径、向量库存放路径
 DOC_PATH = config.path.repair_docs
 DB_PATH = config.path.chroma_db
+MANIFEST_NAME = "evidence_manifest.json"
 
-def build_repair_knowledge_base():
-    # 分别加载docx、pdf，规避unstructured依赖
-    loader_docx = DirectoryLoader(DOC_PATH, glob="**/*.docx", loader_cls=Docx2txtLoader)
-    loader_pdf = DirectoryLoader(DOC_PATH, glob="**/*.pdf", loader_cls=PyPDFLoader)
-    raw_docs = loader_docx.load() + loader_pdf.load()
-
-    logger.info(f"一共加载文档数量：{len(raw_docs)}")
-    if len(raw_docs) == 0:
-        logger.warning("提示：repair_docs 里面没有可读取的docx/pdf文档")
-        return
-
-    # 文本切片：过长文档拆分小块，检索更精准
-    splitter = RecursiveCharacterTextSplitter(
-        chunk_size=300,  # 每一段最大字数
-        chunk_overlap=50  # 两段重叠50个字，避免上下文割裂
-    )
-    split_doc = splitter.split_documents(raw_docs)
-    logger.info(f"拆分后文本片段总数：{len(split_doc)}")
-
-    # 初始化Embedding嵌入模型
-    embedding = MyDashScopeEmbedding(model=config.embedding.model,api_key=config.embedding.api_key)
-
-    # 存入本地向量数据库
-    vector_da = Chroma.from_documents(
-        documents=split_doc,
-        embedding=embedding,
-        persist_directory=DB_PATH
-    )
-    vector_da.persist()
-    logger.info("维修知识库构建完成，向量库已持久化本地！")
+def build_repair_knowledge_base(*, doc_path=None, case_path=None, db_path=None, embedding=None):
+    """显式调用才建库；测试注入假 Embedding 与临时路径，不覆盖旧集合。"""
+    documents = prepare_documents(Path(doc_path or DOC_PATH),
+                                  Path(case_path or PROJECT_ROOT / "data" / "repair_cases"))
+    if not documents:
+        raise ValueError("没有可用于建库的参考文档或已确认案例")
+    ids = [doc.metadata["chunk_id"] for doc in documents]
+    fingerprint = hashlib.sha256(json.dumps([
+        {"text": doc.page_content, "metadata": doc.metadata} for doc in documents
+    ], ensure_ascii=False, sort_keys=True).encode()).hexdigest()
+    collection_name = "repair_evidence_" + fingerprint[:24]
+    destination = Path(db_path or DB_PATH)
+    embeddings = embedding if embedding is not None else MyDashScopeEmbedding(
+        model=config.embedding.model, api_key=config.embedding.api_key)
+    store = Chroma.from_documents(documents=documents, ids=ids, embedding=embeddings,
+                                  collection_name=collection_name, persist_directory=str(destination))
+    # 切换前核对实际写入的编号、正文和元数据，失败保留原入口。
+    saved = store.get(ids=ids, include=["documents", "metadatas"])
+    expected = {key: (doc.page_content, doc.metadata) for key, doc in zip(ids, documents)}
+    actual = {key: (body, metadata) for key, body, metadata in
+              zip(saved["ids"], saved["documents"], saved["metadatas"])}
+    if actual != expected:
+        raise ValueError("知识快照写入核对失败，未切换检索入口")
+    manifest = {"schema_version": 1, "collection_name": collection_name, "fingerprint": fingerprint,
+                "chunk_count": len(ids)}
+    destination.mkdir(parents=True, exist_ok=True)
+    temporary = None
+    try:
+        with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", dir=destination,
+                                         suffix=".tmp", delete=False) as handle:
+            temporary = Path(handle.name)
+            json.dump(manifest, handle, ensure_ascii=False, indent=2)
+        os.replace(temporary, destination / MANIFEST_NAME)
+    finally:
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
+    logger.info("知识快照构建并核对完成，片段数=%s", len(ids))
+    return manifest
 
 
 if __name__ == "__main__":

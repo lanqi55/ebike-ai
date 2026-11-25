@@ -128,4 +128,4 @@ def test_existing_knowledge_without_matches_is_empty_success(monkeypatch, tmp_pa
     monkeypatch.setattr(config.embedding, "api_key", "offline-placeholder")
     monkeypatch.setattr(knowledge_tools, "MyDashScopeEmbedding", lambda **kw: object())
     monkeypatch.setattr(knowledge_tools, "Chroma", lambda **kw: SimpleNamespace(similarity_search=lambda *a, **k: []))
-    assert knowledge_tools.search_repair_knowledge("故障") == ""
+    assert knowledge_tools.search_repair_knowledge("故障") == []
